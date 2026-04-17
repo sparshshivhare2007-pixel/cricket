@@ -1,4 +1,4 @@
-# handlers.py - Final Correct Flow
+# handlers.py - Final Complete Working Version
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -293,9 +293,20 @@ Voters:
         game = games[chat_id]
         players = game["players"]
         
-        # Send players list
-        players_text = "Match Started!\n\nPlayers:\n" + "\n".join([f"{i+1}. {p['name']}" for i, p in enumerate(players)])
-        await client.send_message(chat_id, players_text)
+        # Send SOLO TREE COMMUNITY host image with player list
+        host_text = "SOLO TREE COMMUNITY\n\nUnknown Host\n\nSolo Players\n\n"
+        for i, p in enumerate(players, 1):
+            name = f"@{p['username']}" if p.get("username") else p["name"]
+            host_text += f"{i}. {name}\n"
+        
+        try:
+            await client.send_photo(
+                chat_id,
+                HOST_IMAGE_URL,
+                caption=host_text
+            )
+        except:
+            await client.send_message(chat_id, host_text)
         
         # STEP 1: Batter announce
         batter = game["current_batter"]
@@ -409,6 +420,9 @@ Voters:
                 await message.reply(OUT_MESSAGE.format(
                     batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
             
+            # Send scoreboard after out
+            await message.reply(build_scoreboard(game["players"], is_final=False))
+            
             # Check game over
             if game.get("game_over"):
                 final_text = build_scoreboard(game["players"], is_final=True)
@@ -419,7 +433,7 @@ Voters:
             new_batter = game["current_batter"]
             await message.reply(f"New batter: [{new_batter['name']}](tg://user?id={new_batter['id']})", disable_web_page_preview=True)
             
-            # Check if bowler changed
+            # Send bowling video for next ball
             new_bowler = game["current_bowler"]
             await send_bowling_video(client, chat_id, new_bowler)
             
@@ -435,7 +449,6 @@ Voters:
                     bat=bat, bowler=bowler["name"], bowl=bow))
             
             # After run - send bowling video for next ball
-            # Check if bowler completed his overs
             if game["current_bowler_balls"] >= ball_mode:
                 # Bowler changed - show scoreboard once
                 await message.reply(build_scoreboard(game["players"], is_final=False))
