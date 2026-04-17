@@ -1,4 +1,4 @@
-# handlers.py - Complete updated version
+# handlers.py - Final Version with Local Assets Support
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
@@ -6,21 +6,22 @@ from config import *
 from solo.game import *
 from solo.scoreboard import build_scoreboard
 import asyncio
+import os
 
 votes = {}
 
-# Run video mapping function
+# Run video mapping function (Uses local files from config)
 def get_run_video(runs):
-    """Return video URL based on runs scored"""
+    """Return video based on runs scored"""
     run_videos = {
-        1: RUN_1_VIDEO_URL,
-        2: RUN_2_VIDEO_URL,
-        3: RUN_3_VIDEO_URL,
-        4: FOUR_VIDEO_URL,
-        5: RUN_5_VIDEO_URL,
-        6: SIX_VIDEO_URL
+        1: RUN_1_VIDEO,
+        2: RUN_2_VIDEO,
+        3: RUN_3_VIDEO,
+        4: RUN_4_VIDEO,
+        5: RUN_5_VIDEO,
+        6: RUN_6_VIDEO
     }
-    return run_videos.get(runs, RUN_1_VIDEO_URL)
+    return run_videos.get(runs, RUN_1_VIDEO)
 
 def register_handlers(app):
 
@@ -139,16 +140,27 @@ def register_handlers(app):
 
         await client.send_message(chat_id, "🚀 Game starting...")
 
-        await client.send_video(
-            chat_id,
-            BOWLING_VIDEO_URL,
-            caption=BOWLING_MESSAGE.format(
-                bowler=game["current_bowler"]["name"]
-            ),
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Bowling", callback_data="start_bowling")]]
+        # Send bowling video (local file)
+        try:
+            await client.send_video(
+                chat_id,
+                BOWLING_VIDEO,
+                caption=BOWLING_MESSAGE.format(
+                    bowler=game["current_bowler"]["name"]
+                ),
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("Bowling", callback_data="start_bowling")]]
+                )
             )
-        )
+        except Exception as e:
+            print(f"Error sending bowling video: {e}")
+            await client.send_message(
+                chat_id,
+                BOWLING_MESSAGE.format(bowler=game["current_bowler"]["name"]),
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("Bowling", callback_data="start_bowling")]]
+                )
+            )
 
     # ================= BOWLING BUTTON =================
     @app.on_callback_query(filters.regex("^start_bowling$"))
@@ -179,10 +191,10 @@ def register_handlers(app):
         user_id = message.from_user.id
 
         for chat_id, game in games.items():
-            if game["status"] != "playing":
+            if game.get("status") != "playing":
                 continue
 
-            if game["current_bowler"]["id"] != user_id:
+            if game.get("current_bowler", {}).get("id") != user_id:
                 continue
 
             text = (message.text or "").strip()
@@ -196,36 +208,67 @@ def register_handlers(app):
 
             set_bowling(chat_id, num)
 
-            await client.send_video(
-                chat_id,
-                BATTING_VIDEO_URL,
-                caption=(
-                    f"🏏 Now Batter: {game['current_batter']['name']}\n"
-                    "🔥 Send number (1-6) in GROUP"
+            # Send batting video (local file)
+            try:
+                await client.send_video(
+                    chat_id,
+                    BATTING_VIDEO,
+                    caption=(
+                        f"🏏 Now Batter: {game['current_batter']['name']}\n"
+                        "🔥 Send number (1-6) in GROUP"
+                    )
                 )
-            )
+            except Exception as e:
+                print(f"Error sending batting video: {e}")
+                await client.send_message(
+                    chat_id,
+                    f"🏏 Now Batter: {game['current_batter']['name']}\n🔥 Send number (1-6) in GROUP"
+                )
             
             await message.reply("✅ Bowling number sent to game!")
+            break
 
-    # ================= BATTING WITH RUN VIDEOS =================
+    # ================= BATTING WITH LOCAL VIDEOS =================
     @app.on_message(filters.group & filters.text & ~filters.bot)
     async def batting(client, message: Message):
         chat_id = message.chat.id
         game = games.get(chat_id)
 
-        if not game or game["status"] != "playing":
+        # Debug prints
+        print(f"=== Batting Handler Called ===")
+        print(f"Chat ID: {chat_id}")
+        print(f"Game exists: {game is not None}")
+        
+        if not game:
+            return
+        
+        print(f"Game status: {game.get('status')}")
+        
+        if game.get("status") != "playing":
+            print("Game not in playing state")
             return
 
         # Check if bowling number is set
         if game.get("bowling_number") is None:
+            print("Bowling number not set - waiting for bowler")
             await message.reply("⏳ Waiting for bowler to bowl first!")
             return
 
         batter = game.get("current_batter")
-        if not batter or message.from_user.id != batter["id"]:
+        if not batter:
+            print("No current batter found")
+            return
+        
+        print(f"Current batter ID: {batter.get('id')}")
+        print(f"Message from user ID: {message.from_user.id}")
+        
+        if message.from_user.id != batter.get("id"):
+            print("Not batter's turn")
             return
 
         text = (message.text or "").strip()
+        print(f"Batting number received: {text}")
+        
         if not text.isdigit():
             return await message.reply(INVALID_NUMBER)
 
@@ -233,23 +276,36 @@ def register_handlers(app):
         if bat < 1 or bat > 6:
             return await message.reply(INVALID_NUMBER)
 
+        print(f"Processing bat number: {bat}")
         result = play_ball(chat_id, bat)
-        bow = game["bowling_number"]
+        bow = game.get("bowling_number", "?")
 
         # Clear bowling number after play
         game["bowling_number"] = None
 
         # ================= OUT =================
         if result["type"] == "out":
-            await message.reply_video(
-                OUT_VIDEO_URL,
-                caption=OUT_MESSAGE.format(
-                    batter=batter["name"],
-                    bat=bat,
-                    bowler=game["current_bowler"]["name"],
-                    bowl=bow
+            print(f"OUT! Batter: {batter['name']}")
+            try:
+                await message.reply_video(
+                    OUT_VIDEO,
+                    caption=OUT_MESSAGE.format(
+                        batter=batter["name"],
+                        bat=bat,
+                        bowler=game["current_bowler"]["name"],
+                        bowl=bow
+                    )
                 )
-            )
+            except Exception as e:
+                print(f"Error sending out video: {e}")
+                await message.reply(
+                    OUT_MESSAGE.format(
+                        batter=batter["name"],
+                        bat=bat,
+                        bowler=game["current_bowler"]["name"],
+                        bowl=bow
+                    )
+                )
             
             # Check if game is over
             if game.get("game_over"):
@@ -263,23 +319,38 @@ def register_handlers(app):
             runs = result['runs']
             runs_text = f"{runs} run{'s' if runs > 1 else ''}"
             
-            # Get the appropriate run video
-            run_video_url = get_run_video(runs)
+            print(f"RUN! {runs} runs scored by {batter['name']}")
+            
+            # Get the appropriate run video (local file)
+            run_video = get_run_video(runs)
             
             # Send run video
-            await message.reply_video(
-                run_video_url,
-                caption=RUN_MESSAGE.format(
-                    batter=batter["name"],
-                    runs=runs_text,
-                    bat=bat,
-                    bowler=game["current_bowler"]["name"],
-                    bowl=bow
+            try:
+                await message.reply_video(
+                    run_video,
+                    caption=RUN_MESSAGE.format(
+                        batter=batter["name"],
+                        runs=runs_text,
+                        bat=bat,
+                        bowler=game["current_bowler"]["name"],
+                        bowl=bow
+                    )
                 )
-            )
+            except Exception as e:
+                print(f"Error sending run video for {runs} runs: {e}")
+                await message.reply(
+                    RUN_MESSAGE.format(
+                        batter=batter["name"],
+                        runs=runs_text,
+                        bat=bat,
+                        bowler=game["current_bowler"]["name"],
+                        bowl=bow
+                    )
+                )
 
         # Send scoreboard
-        await message.reply(build_scoreboard(game["players"]))
+        scoreboard_text = build_scoreboard(game["players"])
+        await message.reply(scoreboard_text)
 
         # Check again if game is over after updating score
         if game.get("game_over"):
@@ -309,7 +380,7 @@ def register_handlers(app):
             # Update current batter and bowler
             game["current_batter"] = players[next_index].copy()
             
-            # Set bowler to previous batter or next player
+            # Set bowler to next player
             bowler_index = (next_index + 1) % len(players)
             game["current_bowler"] = players[bowler_index].copy()
 
@@ -320,13 +391,22 @@ def register_handlers(app):
                 )
             )
 
-            # Ask next bowler to bowl
-            await message.reply_video(
-                BOWLING_VIDEO_URL,
-                caption=BOWLING_MESSAGE.format(
-                    bowler=game["current_bowler"]["name"]
-                ),
-                reply_markup=InlineKeyboardMarkup(
-                    [[InlineKeyboardButton("Bowling", callback_data="start_bowling")]]
+            # Ask next bowler to bowl with local video
+            try:
+                await message.reply_video(
+                    BOWLING_VIDEO,
+                    caption=BOWLING_MESSAGE.format(
+                        bowler=game["current_bowler"]["name"]
+                    ),
+                    reply_markup=InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("Bowling", callback_data="start_bowling")]]
+                    )
                 )
-            )
+            except Exception as e:
+                print(f"Error sending bowling video: {e}")
+                await message.reply(
+                    BOWLING_MESSAGE.format(bowler=game["current_bowler"]["name"]),
+                    reply_markup=InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("Bowling", callback_data="start_bowling")]]
+                    )
+                )
