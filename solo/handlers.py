@@ -1,7 +1,7 @@
-# handlers.py - Final Complete with Ball Selection
+# handlers.py - Final Complete
 
 from pyrogram import filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, InputMediaPhoto  # Added InputMediaPhoto
 from pyrogram.enums import ChatMemberStatus
 from config import *
 from solo.game import *
@@ -42,7 +42,14 @@ def register_handlers(app):
             [InlineKeyboardButton("❌ Cancel", callback_data="mode_cancel")]
         ])
         
-        caption = """Select game mode:"""
+        caption = """**SOLO TREE COMMUNITY**
+
+**SELECT GAME**
+
+🎯 Solo Mode
+👥 Team Match
+
+Select game mode:"""
         
         try:
             await message.reply_photo(SELECT_GAME_IMG, caption=caption, reply_markup=keyboard)
@@ -66,12 +73,11 @@ def register_handlers(app):
         if action == "solo":
             await ball_selection_menu(client, callback)
 
-    # ================= BALL SELECTION MENU =================
+    # ================= BALL SELECTION MENU (WITH SOLO PLAY IMAGE) =================
     async def ball_selection_menu(client, callback):
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("⚾ Solo Play - 1 Ball", callback_data="ball_1")],
-            [InlineKeyboardButton("🏏 Solo Play - 3 Ball", callback_data="ball_3")],
-            [InlineKeyboardButton("🔙 Back", callback_data="ball_back")]
+            [InlineKeyboardButton("🏏 Solo Play - 3 Ball", callback_data="ball_3")]
         ])
         
         caption = """**SOLO TREE COMMUNITY**
@@ -83,21 +89,25 @@ def register_handlers(app):
 ⚾ Solo Play - 1 Ball
 🏏 Solo Play - 3 Ball"""
         
-        await callback.message.edit_caption(
-            caption=caption,
-            reply_markup=keyboard
-        )
+        try:
+            await callback.message.edit_media(
+                media=InputMediaPhoto(
+                    media=SOLO_PLAY_IMG,
+                    caption=caption
+                ),
+                reply_markup=keyboard
+            )
+        except:
+            await callback.message.edit_caption(
+                caption=caption,
+                reply_markup=keyboard
+            )
         await callback.answer()
 
     # ================= BALL SELECTION HANDLER =================
     @app.on_callback_query(filters.regex("^ball_"))
     async def ball_handler(client, callback: CallbackQuery):
         action = callback.data.split("_")[1]
-        
-        if action == "back":
-            await callback.message.delete()
-            await select_game_menu(client, callback.message)
-            return
         
         ball_mode = int(action)
         chat_id = callback.message.chat.id
