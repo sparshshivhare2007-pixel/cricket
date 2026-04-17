@@ -1,3 +1,4 @@
+# config.py
 import os
 from dotenv import load_dotenv
 
@@ -30,18 +31,59 @@ GAME_INSTRUCTIONS_IMAGE_URL = "https://files.catbox.moe/iq4758.jpg"
 RESULT_IMAGE_URL = "https://graph.org/file/17971526dfefa9e20863b-44207fd3a022c59c53.jpg"
 SOLO_GAME_START_IMAGE = "https://files.catbox.moe/0odkk1.jpg"
 
-# ========== SOLO MODE MEDIA ==========
+# ========== SOLO MODE MEDIA (Local Files) ==========
+ASSETS_PATH = "assets"
+
+# Video file paths - Make sure these files exist in your assets/videos/ folder
+BOWLING_VIDEO_PATH = os.path.join(ASSETS_PATH, "videos", "bowling.mp4")
+BATTING_VIDEO_PATH = os.path.join(ASSETS_PATH, "videos", "batting.mp4")
+OUT_VIDEO_PATH = os.path.join(ASSETS_PATH, "videos", "out.mp4")
+RUN_1_VIDEO_PATH = os.path.join(ASSETS_PATH, "videos", "run1.mp4")
+RUN_2_VIDEO_PATH = os.path.join(ASSETS_PATH, "videos", "run2.mp4")
+RUN_3_VIDEO_PATH = os.path.join(ASSETS_PATH, "videos", "run3.mp4")
+RUN_4_VIDEO_PATH = os.path.join(ASSETS_PATH, "videos", "run4.mp4")
+RUN_5_VIDEO_PATH = os.path.join(ASSETS_PATH, "videos", "run5.mp4")
+RUN_6_VIDEO_PATH = os.path.join(ASSETS_PATH, "videos", "run6.mp4")
+
+# Keep URLs as fallback (in case local files don't exist)
 BOWLING_VIDEO_URL = "https://files.catbox.moe/r75e19.mp4"
 BATTING_VIDEO_URL = "https://files.catbox.moe/26qdaw.mp4"
 OUT_VIDEO_URL = "https://files.catbox.moe/7ixfhp.mp4"
-
-# RUN VIDEOS
 RUN_1_VIDEO_URL = "https://graph.org/file/88e77efecd24d39af3918-6684feebb8fe546a95.mp4"
 RUN_2_VIDEO_URL = "https://graph.org/file/668a1fe8632c5a2a00d9d-61cbe9729b733341ff.mp4"
 RUN_3_VIDEO_URL = "https://graph.org/file/d913fa6143c8a338055ff-7fd548d599f4389c5f.mp4"
 FOUR_VIDEO_URL = "https://graph.org/file/f122a1d001bee672c3717-a8acfd94740ab619f9f.mp4"
 RUN_5_VIDEO_URL = "https://graph.org/file/4bbb87b5d33ac6bed64e5-841214f4c3d85a6dd1.mp4"
 SIX_VIDEO_URL = "https://graph.org/file/5652ee0d8c02e04118b9e-ec070692c1c407ce98.mp4"
+
+# Function to get video file (local or URL)
+def get_video_file(video_path, video_url):
+    """Return local file path if exists, else return URL"""
+    if os.path.exists(video_path):
+        return video_path
+    print(f"Local video not found: {video_path}, using URL fallback")
+    return video_url
+
+# Pre-define video file objects for easy access
+BOWLING_VIDEO = get_video_file(BOWLING_VIDEO_PATH, BOWLING_VIDEO_URL)
+BATTING_VIDEO = get_video_file(BATTING_VIDEO_PATH, BATTING_VIDEO_URL)
+OUT_VIDEO = get_video_file(OUT_VIDEO_PATH, OUT_VIDEO_URL)
+RUN_1_VIDEO = get_video_file(RUN_1_VIDEO_PATH, RUN_1_VIDEO_URL)
+RUN_2_VIDEO = get_video_file(RUN_2_VIDEO_PATH, RUN_2_VIDEO_URL)
+RUN_3_VIDEO = get_video_file(RUN_3_VIDEO_PATH, RUN_3_VIDEO_URL)
+RUN_4_VIDEO = get_video_file(RUN_4_VIDEO_PATH, FOUR_VIDEO_URL)
+RUN_5_VIDEO = get_video_file(RUN_5_VIDEO_PATH, RUN_5_VIDEO_URL)
+RUN_6_VIDEO = get_video_file(RUN_6_VIDEO_PATH, SIX_VIDEO_URL)
+
+# Dictionary for easy access
+RUN_VIDEOS = {
+    1: RUN_1_VIDEO,
+    2: RUN_2_VIDEO,
+    3: RUN_3_VIDEO,
+    4: RUN_4_VIDEO,
+    5: RUN_5_VIDEO,
+    6: RUN_6_VIDEO
+}
 
 # ========== TIMERS ==========
 BOWLING_TIMER_SECONDS = 60
@@ -51,7 +93,6 @@ JOINING_TIMER_SECONDS = 120
 SOLO_ICONS = ["⚪", "🟠", "🟢", "🟣", "🔵", "🟡", "⚫", "🔴"]
 
 # ========== MESSAGES ==========
-
 START_VOTE_MESSAGE = """
 🗳️ Voting Required!
 At least 3 members must vote.
@@ -91,7 +132,6 @@ BOWLING_WARNING_30 = """
 INVALID_NUMBER = "❌ Send number between 1-6"
 NOT_YOUR_TURN = "❌ Not your turn"
 
-# ================= FIXED RUN MESSAGE =================
 RUN_MESSAGE = """
 🏏 {batter} scored {runs}!
 
