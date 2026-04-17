@@ -42,14 +42,7 @@ def register_handlers(app):
             [InlineKeyboardButton("❌ Cancel", callback_data="mode_cancel")]
         ])
         
-        caption = """**SOLO TREE COMMUNITY**
-
-**SELECT GAME**
-
-🎯 Solo Mode
-👥 Team Match
-
-Select game mode:"""
+        caption = """Select game mode:"""
         
         try:
             await message.reply_photo(SELECT_GAME_IMG, caption=caption, reply_markup=keyboard)
