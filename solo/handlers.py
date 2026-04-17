@@ -312,16 +312,14 @@ Voters:
         batter = game["current_batter"]
         await client.send_message(
             chat_id,
-            f"Hey [{batter['name']}](tg://user?id={batter['id']}), now you're batter!",
-            disable_web_page_preview=True
+            f"Hey [{batter['name']}](tg://user?id={batter['id']}), now you're batter!"
         )
         
         # STEP 2: Bowler announce
         bowler = game["current_bowler"]
         await client.send_message(
             chat_id,
-            f"Hey [{bowler['name']}](tg://user?id={bowler['id']}), now you're bowling!",
-            disable_web_page_preview=True
+            f"Hey [{bowler['name']}](tg://user?id={bowler['id']}), now you're bowling!"
         )
         
         # STEP 3: Send bowling video with button
@@ -431,7 +429,7 @@ Voters:
             
             # New batter
             new_batter = game["current_batter"]
-            await message.reply(f"New batter: [{new_batter['name']}](tg://user?id={new_batter['id']})", disable_web_page_preview=True)
+            await message.reply(f"New batter: [{new_batter['name']}](tg://user?id={new_batter['id']})")
             
             # Send bowling video for next ball
             new_bowler = game["current_bowler"]
@@ -453,7 +451,7 @@ Voters:
                 # Bowler changed - show scoreboard once
                 await message.reply(build_scoreboard(game["players"], is_final=False))
                 new_bowler = game["current_bowler"]
-                await message.reply(f"Bowler changed! Now bowling: [{new_bowler['name']}](tg://user?id={new_bowler['id']})", disable_web_page_preview=True)
+                await message.reply(f"Bowler changed! Now bowling: [{new_bowler['name']}](tg://user?id={new_bowler['id']})")
                 await send_bowling_video(client, chat_id, new_bowler)
             else:
                 # Same bowler continues
