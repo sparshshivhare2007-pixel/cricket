@@ -12,7 +12,6 @@ async def auto_start_game(client, chat_id):
     await asyncio.sleep(JOINING_TIMER_SECONDS)
 
     game = games.get(chat_id)
-
     if not game or game["status"] != "waiting":
         return
 
@@ -23,6 +22,7 @@ async def auto_start_game(client, chat_id):
         return
 
     text = "👑 Unknown Host\n\n👤 Solo Players\n\n"
+
     for i, p in enumerate(players, 1):
         name = f"@{p.get('username')}" if p.get("username") else p["name"]
         text += f"{i}. {name}\n"
@@ -58,12 +58,7 @@ def register_handlers(app):
         votes[chat_id] = {"count": 0, "users": []}
 
         await message.reply(
-            """🗳️ Voting in Progress:
-
-Current votes: 0/3
-
-Click 'Vote to Start' to participate!
-""",
+            "🗳️ Voting in Progress:\n\nCurrent votes: 0/3",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("Vote to Start", callback_data="vote_start")]]
             )
@@ -85,15 +80,15 @@ Click 'Vote to Start' to participate!
         data["users"].append(user.id)
         data["count"] += 1
 
-        voters = ""
-        for uid in data["users"]:
-            u = await client.get_users(uid)
-            voters += f"\n{u.first_name}"
+        voters = "\n".join([f"• {u.first_name}" for u in [
+            await client.get_users(uid) for uid in data["users"]
+        ]])
 
         text = f"""🗳️ Voting in Progress:
 
 Current votes: {data['count']}/3
-Voters:{voters}
+Voters:
+{voters}
 
 Click 'Vote to Start' to participate!
 """
@@ -105,15 +100,18 @@ Click 'Vote to Start' to participate!
             )
         )
 
+        # ================= VOTE COMPLETE =================
         if data["count"] >= 3:
-            await callback.message.edit_text("✅ Voting successful! The game will start shortly.")
+            await callback.message.edit_text(
+                "✅ Voting successful! The game will start shortly."
+            )
 
             await asyncio.sleep(1)
 
             await client.send_photo(
                 chat_id,
                 SOLO_GAME_START_IMAGE,
-                caption="🥎 Select number of balls:",
+                caption="🥎 Select Mode:",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("1 Ball", callback_data="solo_1")],
                     [InlineKeyboardButton("3 Ball", callback_data="solo_3")]
@@ -127,13 +125,13 @@ Click 'Vote to Start' to participate!
 
         game = games.get(chat_id)
         if game:
-            game["mode"] = "1 Ball" if callback.data == "solo_1" else "3 Ball"
+            game["mode"] = callback.data
 
         await callback.message.delete()
 
         await client.send_message(
             chat_id,
-            "🎉 Game created!\n\nJoin the game using /joingame\n(2 minutes ⏰)"
+            "🎉 Game created!\n\nJoin using /joingame\n⏰ 2 minutes left"
         )
 
         asyncio.create_task(auto_start_game(client, chat_id))
@@ -149,7 +147,7 @@ Click 'Vote to Start' to participate!
                 f"🎉 {message.from_user.first_name} joined! (Player {len(game['players'])})"
             )
 
-    # ================= BOWLING BUTTON (FIXED) =================
+    # ================= BOWLING BUTTON FIX =================
     @app.on_callback_query(filters.regex("^start_bowling$"))
     async def start_bowling(client, callback):
         chat_id = callback.message.chat.id
@@ -170,7 +168,7 @@ Click 'Vote to Start' to participate!
                 "🎯 Bowling Started!\nSend number (1-6)\n⏰ 60 seconds"
             )
         except:
-            await callback.answer("Start bot in DM first ❌", show_alert=True)
+            await callback.answer("Open bot in DM first ❌", show_alert=True)
 
     # ================= BOWLING DM =================
     @app.on_message(filters.private & filters.text)
@@ -221,7 +219,6 @@ Click 'Vote to Start' to participate!
             return await message.reply(INVALID_NUMBER)
 
         result = play_ball(chat_id, bat)
-
         bow = game["bowling_number"]
 
         if result["type"] == "out":
@@ -245,7 +242,6 @@ Click 'Vote to Start' to participate!
                 )
             )
 
-        # SCOREBOARD
         await message.reply(build_scoreboard(game["players"]))
 
         # ROTATION
