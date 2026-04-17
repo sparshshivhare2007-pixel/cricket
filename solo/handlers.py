@@ -1,4 +1,5 @@
-# handlers.py
+# handlers.py - Fixed Admin Detection
+
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from config import *
@@ -9,13 +10,24 @@ import asyncio
 active_votes = {}
 
 def get_run_video(runs):
-    return RUN_VIDEOS.get(runs, RUN_1_VIDEO)
+    run_videos = {1: RUN_1_VIDEO, 2: RUN_2_VIDEO, 3: RUN_3_VIDEO, 4: RUN_4_VIDEO, 5: RUN_5_VIDEO, 6: RUN_6_VIDEO}
+    return run_videos.get(runs, RUN_1_VIDEO)
 
 async def is_admin(client, chat_id, user_id):
+    """Check if user is admin - FIXED VERSION"""
     try:
+        # Get chat member info
         member = await client.get_chat_member(chat_id, user_id)
-        return member.status in ["administrator", "creator"]
-    except:
+        
+        # Print for debugging
+        print(f"🔍 User ID: {user_id}")
+        print(f"🔍 Status: {member.status}")
+        print(f"🔍 Is admin/creator: {member.status in ['administrator', 'creator']}")
+        
+        # Return True if user is creator or administrator
+        return member.status in ["creator", "administrator"]
+    except Exception as e:
+        print(f"❌ Error checking admin: {e}")
         return False
 
 def register_handlers(app):
@@ -26,15 +38,23 @@ def register_handlers(app):
         chat_id = message.chat.id
         user_id = message.from_user.id
         
-        if await is_admin(client, chat_id, user_id):
-            # ADMIN - Direct SELECT GAME
+        print(f"📱 /start command from user: {user_id}")
+        print(f"📱 Chat ID: {chat_id}")
+        
+        # Check if user is admin
+        admin_status = await is_admin(client, chat_id, user_id)
+        print(f"📱 Is Admin: {admin_status}")
+        
+        if admin_status:
+            print("✅ ADMIN - Showing SELECT GAME menu")
             await select_game_menu(client, message)
         else:
-            # MEMBER - Voting
+            print("❌ MEMBER - Showing VOTE system")
             await vote_system(client, message)
 
     # ================= SELECT GAME MENU (ADMIN) =================
     async def select_game_menu(client, message):
+        print("🎮 Opening SELECT GAME menu")
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🎯 Solo", callback_data="mode_solo"), InlineKeyboardButton("👥 Team", callback_data="mode_team")],
             [InlineKeyboardButton("💰 Start Auction", callback_data="mode_auction"), InlineKeyboardButton("🏆 Tournament Mode", callback_data="mode_tournament")],
@@ -90,6 +110,7 @@ Select the game mode:"""
     # ================= VOTE SYSTEM (MEMBER) =================
     async def vote_system(client, message):
         chat_id = message.chat.id
+        print(f"🗳️ Starting VOTE system for chat: {chat_id}")
         
         if chat_id in active_votes and active_votes[chat_id].get("active"):
             await message.reply(f"🗳️ Voting already in progress! Votes: {active_votes[chat_id]['count']}/3")
@@ -136,7 +157,7 @@ Current votes: 0/3"""
         vote["users"].append(user.id)
         vote["count"] += 1
         
-        # Get voter names (works even without DP)
+        # Get voter names
         voters = []
         for uid in vote["users"]:
             try:
