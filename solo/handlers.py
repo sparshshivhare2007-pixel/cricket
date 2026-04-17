@@ -22,15 +22,13 @@ async def auto_start_game(client, chat_id):
         await client.send_message(chat_id, "❌ Not enough players to start.")
         return
 
-    # FINAL PLAYER LIST
     text = "👑 Unknown Host\n\n👤 Solo Players\n\n"
     for i, p in enumerate(players, 1):
-        name = f"@{p['username']}" if p.get("username") else p["name"]
+        name = f"@{p.get('username')}" if p.get("username") else p["name"]
         text += f"{i}. {name}\n"
 
     await client.send_message(chat_id, text)
 
-    # START GAME
     start_match(chat_id)
     game = games[chat_id]
 
@@ -47,7 +45,7 @@ async def auto_start_game(client, chat_id):
         )
     )
 
-# ================= REGISTER =================
+
 def register_handlers(app):
 
     # ================= START =================
@@ -72,12 +70,14 @@ Click 'Vote to Start' to participate!
         )
 
     # ================= VOTE =================
-    @app.on_callback_query(filters.regex("vote_start"))
+    @app.on_callback_query(filters.regex("^vote_start$"))
     async def vote(client, callback):
         chat_id = callback.message.chat.id
         user = callback.from_user
 
         data = votes.get(chat_id)
+        if not data:
+            return await callback.answer()
 
         if user.id in data["users"]:
             return await callback.answer("Already voted ❌", show_alert=True)
@@ -106,11 +106,9 @@ Click 'Vote to Start' to participate!
         )
 
         if data["count"] >= 3:
-            await callback.message.edit_text(
-                "✅ Voting successful! The game will start shortly."
-            )
+            await callback.message.edit_text("✅ Voting successful! The game will start shortly.")
 
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(1)
 
             await client.send_photo(
                 chat_id,
@@ -123,7 +121,7 @@ Click 'Vote to Start' to participate!
             )
 
     # ================= MODE SELECT =================
-    @app.on_callback_query(filters.regex("solo_"))
+    @app.on_callback_query(filters.regex("^solo_"))
     async def solo_mode(client, callback):
         chat_id = callback.message.chat.id
 
@@ -135,10 +133,7 @@ Click 'Vote to Start' to participate!
 
         await client.send_message(
             chat_id,
-            """🎉 Game created!
-
-Join the game using /joingame
-(2 minutes to join) ⏰"""
+            "🎉 Game created!\n\nJoin the game using /joingame\n(2 minutes ⏰)"
         )
 
         asyncio.create_task(auto_start_game(client, chat_id))
@@ -150,33 +145,30 @@ Join the game using /joingame
 
         if join_game(chat_id, message.from_user):
             game = games[chat_id]
-            player_no = len(game["players"])
-
             await message.reply(
-                f"🎉 {message.from_user.first_name}, you've joined the game! (Player {player_no}) 👍"
+                f"🎉 {message.from_user.first_name} joined! (Player {len(game['players'])})"
             )
 
-    # ================= BOWLING BUTTON =================
-    @app.on_callback_query(filters.regex("start_bowling"))
-    async def start_bowling_callback(client, callback):
-        user = callback.from_user
+    # ================= BOWLING BUTTON (FIXED) =================
+    @app.on_callback_query(filters.regex("^start_bowling$"))
+    async def start_bowling(client, callback):
         chat_id = callback.message.chat.id
+        user = callback.from_user
 
         game = games.get(chat_id)
+        if not game:
+            return await callback.answer("Game not found ❌", show_alert=True)
 
         if game["current_bowler"]["id"] != user.id:
-            return await callback.answer("Not your turn ❌", show_alert=True)
+            return await callback.answer("❌ Not your turn", show_alert=True)
+
+        await callback.answer("Check DM 📩", show_alert=True)
 
         try:
-            await client.send_video(
+            await client.send_message(
                 user.id,
-                BOWLING_VIDEO_URL,
-                caption=f"""🎯 You are bowling now!
-
-Send number (1-6)
-⏰ Time: 60 sec"""
+                "🎯 Bowling Started!\nSend number (1-6)\n⏰ 60 seconds"
             )
-            await callback.answer("Check DM ✅", show_alert=True)
         except:
             await callback.answer("Start bot in DM first ❌", show_alert=True)
 
@@ -186,26 +178,28 @@ Send number (1-6)
         user_id = message.from_user.id
 
         for chat_id, game in games.items():
+
             if game["status"] != "playing":
                 continue
 
-            if game["current_bowler"]["id"] == user_id:
+            if game["current_bowler"]["id"] != user_id:
+                continue
 
-                if not message.text.isdigit():
-                    return await message.reply(INVALID_NUMBER)
+            if not message.text.isdigit():
+                return await message.reply(INVALID_NUMBER)
 
-                num = int(message.text)
-                if num < 1 or num > 6:
-                    return await message.reply(INVALID_NUMBER)
+            num = int(message.text)
+            if num < 1 or num > 6:
+                return await message.reply(INVALID_NUMBER)
 
-                set_bowling(chat_id, num)
+            set_bowling(chat_id, num)
 
-                await client.send_message(
-                    chat_id,
-                    f"Current batter: {game['current_batter']['name']}\n\nSend Your number:"
-                )
+            await client.send_message(
+                chat_id,
+                f"🏏 Current batter: {game['current_batter']['name']}"
+            )
 
-                await client.send_video(chat_id, BATTING_VIDEO_URL)
+            await client.send_video(chat_id, BATTING_VIDEO_URL)
 
     # ================= BATTING =================
     @app.on_message(filters.group & filters.text)
@@ -252,16 +246,15 @@ Send number (1-6)
             )
 
         # SCOREBOARD
-        scoreboard = build_scoreboard(game["players"])
-        await message.reply(scoreboard)
+        await message.reply(build_scoreboard(game["players"]))
 
         # ROTATION
         players = game["players"]
-        current_index = players.index(game["current_batter"])
-        next_index = (current_index + 1) % len(players)
+        cur = players.index(game["current_batter"])
+        nxt = (cur + 1) % len(players)
 
-        game["current_batter"] = players[next_index]
-        game["current_bowler"] = players[current_index]
+        game["current_batter"] = players[nxt]
+        game["current_bowler"] = players[cur]
         game["bowling_number"] = None
 
         await message.reply(
