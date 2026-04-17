@@ -1,10 +1,9 @@
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-import asyncio
-
 from config import *
 from solo.game import *
 from solo.scoreboard import build_scoreboard
+import asyncio
 
 votes = {}
 
@@ -13,16 +12,14 @@ async def auto_start_game(client, chat_id):
     await asyncio.sleep(JOINING_TIMER_SECONDS)
 
     game = games.get(chat_id)
-
-    print(f"[DEBUG] Auto start triggered for {chat_id} -> {game}")
-
     if not game or game["status"] != "waiting":
         return
 
     players = game["players"]
 
-    if not players:
-        return await client.send_message(chat_id, "❌ Not enough players")
+    if len(players) < 1:
+        await client.send_message(chat_id, "❌ Not enough players")
+        return
 
     text = "👑 Unknown Host\n\n👤 Players\n\n"
 
@@ -43,50 +40,44 @@ async def auto_start_game(client, chat_id):
         caption=BOWLING_MESSAGE.format(
             bowler=game["current_bowler"]["name"]
         ),
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("Bowling", callback_data="start_bowling")]
-        ])
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Bowling", callback_data="start_bowling")]]
+        )
     )
 
 
 def register_handlers(app):
 
-    # ================= START DEBUG FIX =================
+    # ================= FIXED /START (GROUP SUPPORT) =================
     @app.on_message(filters.command("start"))
     async def start(client, message: Message):
 
         chat_id = message.chat.id
 
-        print(f"[DEBUG] /start called in chat {chat_id} type={message.chat.type}")
-
+        # only group allowed
         if message.chat.type not in ["group", "supergroup"]:
-            return await message.reply("👋 Add me in a group to play cricket 🏏")
+            return await message.reply("❌ Use this in group")
 
         create_game(chat_id)
-
         votes[chat_id] = {"count": 0, "users": []}
 
-        print(f"[DEBUG] Game created + votes initialized for {chat_id}")
-
         await message.reply(
-            "🗳️ Voting Started!\nNeed 3 votes to start game",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("Vote 🏏", callback_data="vote_start")]
-            ])
+            "🗳️ Voting Started!\nNeed 3 votes to begin",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("Vote", callback_data="vote_start")]]
+            )
         )
 
-    # ================= VOTE DEBUG =================
+    # ================= VOTE =================
     @app.on_callback_query(filters.regex("^vote_start$"))
     async def vote(client, callback):
 
         chat_id = callback.message.chat.id
         user = callback.from_user
 
-        print(f"[DEBUG] vote clicked by {user.id} in {chat_id}")
-
         data = votes.get(chat_id)
         if not data:
-            return await callback.answer("No vote session ❌")
+            return await callback.answer()
 
         if user.id in data["users"]:
             return await callback.answer("Already voted ❌", show_alert=True)
@@ -102,16 +93,12 @@ def register_handlers(app):
 
         await callback.message.edit_text(
             f"🗳️ Voting\n\nVotes: {data['count']}/3\n\n{voters}",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("Vote 🏏", callback_data="vote_start")]
-            ])
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("Vote", callback_data="vote_start")]]
+            )
         )
 
-        print(f"[DEBUG] votes = {data['count']}")
-
         if data["count"] >= 3:
-            print("[DEBUG] Voting completed → sending mode select")
-
             await callback.message.edit_text("✅ Game starting...")
 
             await asyncio.sleep(1)
@@ -132,12 +119,9 @@ def register_handlers(app):
 
         chat_id = callback.message.chat.id
 
-        print(f"[DEBUG] mode selected {callback.data}")
-
         game = games.get(chat_id)
         if game:
             game["mode"] = callback.data
-            game["status"] = "waiting"
 
         await callback.message.delete()
 
@@ -156,9 +140,11 @@ def register_handlers(app):
 
         if join_game(chat_id, message.from_user):
             game = games[chat_id]
-            await message.reply(f"🎉 Joined ({len(game['players'])})")
+            await message.reply(
+                f"🎉 Joined ({len(game['players'])})"
+            )
 
-    # ================= BOWLING =================
+    # ================= BOWLING BUTTON =================
     @app.on_callback_query(filters.regex("^start_bowling$"))
     async def start_bowling(client, callback):
 
@@ -166,7 +152,6 @@ def register_handlers(app):
         user = callback.from_user
 
         game = games.get(chat_id)
-
         if not game:
             return await callback.answer("No game ❌", show_alert=True)
 
@@ -175,13 +160,47 @@ def register_handlers(app):
 
         await callback.answer("Check DM 📩", show_alert=True)
 
-        await client.send_message(
-            user.id,
-            "🎯 Send bowling number (1-6)"
-        )
+        try:
+            await client.send_message(
+                user.id,
+                "🎯 Send bowling number (1-6)"
+            )
+        except:
+            await callback.answer("Open DM first ❌", show_alert=True)
+
+    # ================= BOWLING DM =================
+    @app.on_message(filters.private & filters.text)
+    async def bowling_dm(client, message: Message):
+
+        user_id = message.from_user.id
+
+        for chat_id, game in games.items():
+
+            if game["status"] != "playing":
+                continue
+
+            if game["current_bowler"]["id"] != user_id:
+                continue
+
+            text = (message.text or "").strip()
+
+            if not text.isdigit():
+                return await message.reply(INVALID_NUMBER)
+
+            num = int(text)
+            if num < 1 or num > 6:
+                return await message.reply(INVALID_NUMBER)
+
+            set_bowling(chat_id, num)
+
+            await client.send_video(
+                chat_id,
+                BATTING_VIDEO_URL,
+                caption=f"🏏 Batter: {game['current_batter']['name']}\nSend number (1-6)"
+            )
 
     # ================= BATTING =================
-    @app.on_message(filters.group & filters.text & ~filters.bot)
+    @app.on_message(filters.group & filters.text)
     async def batting(client, message: Message):
 
         chat_id = message.chat.id
@@ -191,10 +210,8 @@ def register_handlers(app):
             return
 
         batter = game.get("current_batter")
-        if not batter:
-            return
 
-        if message.from_user.id != batter["id"]:
+        if not batter or message.from_user.id != batter["id"]:
             return
 
         text = (message.text or "").strip()
@@ -210,18 +227,18 @@ def register_handlers(app):
         result = play_ball(chat_id, bat)
         bow = game["bowling_number"]
 
-        print(f"[DEBUG] BAT={bat} BOWL={bow} RESULT={result}")
-
+        # OUT
         if result["type"] == "out":
             await message.reply_video(
                 OUT_VIDEO_URL,
                 caption=OUT_MESSAGE.format(
-                    batter=batter["name"],
                     bat=bat,
                     bowler=game["current_bowler"]["name"],
                     bowl=bow
                 )
             )
+
+        # RUN
         else:
             runs = result["runs"]
             runs_text = f"{runs} run" if runs == 1 else f"{runs} runs"
@@ -238,8 +255,9 @@ def register_handlers(app):
 
         await message.reply(build_scoreboard(game["players"]))
 
-        # rotation
+        # ROTATION SAFE
         players = game["players"]
+
         cur = next((i for i, p in enumerate(players) if p["id"] == batter["id"]), 0)
         nxt = (cur + 1) % len(players)
 
@@ -252,7 +270,7 @@ def register_handlers(app):
             caption=BOWLING_MESSAGE.format(
                 bowler=game["current_bowler"]["name"]
             ),
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("Bowling", callback_data="start_bowling")]
-            ])
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("Bowling", callback_data="start_bowling")]]
+            )
         )
