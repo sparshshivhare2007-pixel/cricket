@@ -80,9 +80,10 @@ def register_handlers(app):
         data["users"].append(user.id)
         data["count"] += 1
 
-        voters = "\n".join([f"• {u.first_name}" for u in [
-            await client.get_users(uid) for uid in data["users"]
-        ]])
+        voters = "\n".join([
+            f"• {u.first_name}" for u in
+            await asyncio.gather(*[client.get_users(uid) for uid in data["users"]])
+        ])
 
         text = f"""🗳️ Voting in Progress:
 
@@ -100,7 +101,7 @@ Click 'Vote to Start' to participate!
             )
         )
 
-        # ================= VOTE COMPLETE =================
+        # ================= START GAME =================
         if data["count"] >= 3:
             await callback.message.edit_text(
                 "✅ Voting successful! The game will start shortly."
@@ -147,7 +148,7 @@ Click 'Vote to Start' to participate!
                 f"🎉 {message.from_user.first_name} joined! (Player {len(game['players'])})"
             )
 
-    # ================= BOWLING BUTTON FIX =================
+    # ================= BOWLING BUTTON =================
     @app.on_callback_query(filters.regex("^start_bowling$"))
     async def start_bowling(client, callback):
         chat_id = callback.message.chat.id
@@ -192,12 +193,14 @@ Click 'Vote to Start' to participate!
 
             set_bowling(chat_id, num)
 
-            await client.send_message(
+            await client.send_video(
                 chat_id,
-                f"🏏 Current batter: {game['current_batter']['name']}"
+                BATTING_VIDEO_URL,
+                caption=(
+                    f"🏏 Now Batter: {game['current_batter']['name']}\n"
+                    "🔥 Can send number (1-6)!!"
+                )
             )
-
-            await client.send_video(chat_id, BATTING_VIDEO_URL)
 
     # ================= BATTING =================
     @app.on_message(filters.group & filters.text)
@@ -221,6 +224,7 @@ Click 'Vote to Start' to participate!
         result = play_ball(chat_id, bat)
         bow = game["bowling_number"]
 
+        # ================= OUT =================
         if result["type"] == "out":
             await message.reply_video(
                 OUT_VIDEO_URL,
@@ -231,11 +235,15 @@ Click 'Vote to Start' to participate!
                     bowl=bow
                 )
             )
+
+        # ================= RUN =================
         else:
+            runs_text = f"{result['runs']} run{'s' if result['runs'] > 1 else ''}"
+
             await message.reply(
                 RUN_MESSAGE.format(
                     batter=game["current_batter"]["name"],
-                    runs=result["runs"],
+                    runs=runs_text,
                     bat=bat,
                     bowler=game["current_bowler"]["name"],
                     bowl=bow
@@ -244,7 +252,7 @@ Click 'Vote to Start' to participate!
 
         await message.reply(build_scoreboard(game["players"]))
 
-        # ROTATION
+        # ================= ROTATION =================
         players = game["players"]
         cur = players.index(game["current_batter"])
         nxt = (cur + 1) % len(players)
