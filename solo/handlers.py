@@ -52,7 +52,6 @@ def register_handlers(app):
     @app.on_message(filters.command("start") & filters.group)
     async def start(client, message: Message):
         chat_id = message.chat.id
-
         create_game(chat_id)
         votes[chat_id] = {"count": 0, "users": []}
 
@@ -79,30 +78,23 @@ def register_handlers(app):
         data["users"].append(user.id)
         data["count"] += 1
 
-        voters = "\n".join([
-            f"• {u.first_name}"
-            for u in await asyncio.gather(*[client.get_users(uid) for uid in data["users"]])
-        ])
-
-        text = f"""🗳️ Voting in Progress:
-
-Current votes: {data['count']}/3
-Voters:
-{voters}
-"""
+        voters = "\n".join(
+            [f"• {u.first_name}" for u in await asyncio.gather(
+                *[client.get_users(uid) for uid in data["users"]]
+            )]
+        )
 
         await callback.message.edit_text(
-            text,
+            f"🗳️ Voting in Progress:\n\n"
+            f"Current votes: {data['count']}/3\n"
+            f"Voters:\n{voters}",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("Vote to Start", callback_data="vote_start")]]
             )
         )
 
         if data["count"] >= 3:
-            await callback.message.edit_text(
-                "✅ Voting successful! Game starting..."
-            )
-
+            await callback.message.edit_text("✅ Voting successful! Game starting...")
             await asyncio.sleep(1)
 
             await client.send_photo(
@@ -200,7 +192,7 @@ Voters:
                 )
             )
 
-    # ================= BATTING (FINAL FIXED CORE) =================
+    # ================= BATTING (FINAL FIXED) =================
     @app.on_message(filters.group & filters.text & ~filters.bot)
     async def batting(client, message: Message):
         chat_id = message.chat.id
@@ -210,24 +202,21 @@ Voters:
             return
 
         batter = game.get("current_batter")
-
         if not batter or message.from_user.id != batter["id"]:
             return
 
         text = (message.text or "").strip()
-
         if not text.isdigit():
             return await message.reply(INVALID_NUMBER)
 
         bat = int(text)
-
         if bat < 1 or bat > 6:
             return await message.reply(INVALID_NUMBER)
 
         result = play_ball(chat_id, bat)
         bow = game["bowling_number"]
 
-        # OUT
+        # ================= OUT =================
         if result["type"] == "out":
             await message.reply_video(
                 OUT_VIDEO_URL,
@@ -238,6 +227,8 @@ Voters:
                     bowl=bow
                 )
             )
+
+        # ================= RUN =================
         else:
             runs_text = f"{result['runs']} run{'s' if result['runs'] > 1 else ''}"
 
@@ -253,15 +244,10 @@ Voters:
 
         await message.reply(build_scoreboard(game["players"]))
 
-        # SAFE ROTATION
+        # ================= SAFE ROTATION =================
         players = game["players"]
 
-        cur = next(
-            (i for i, p in enumerate(players)
-             if p["id"] == batter["id"]),
-            0
-        )
-
+        cur = next((i for i, p in enumerate(players) if p["id"] == batter["id"]), 0)
         nxt = (cur + 1) % len(players)
 
         game["current_batter"] = players[nxt]
