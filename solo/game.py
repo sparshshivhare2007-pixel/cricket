@@ -1,22 +1,20 @@
-# solo/game.py - Updated with run videos support
+# solo/game.py - Final Version
 
-import random
 import time
 
-# We'll import videos in the handler, not here, to avoid circular imports
 games = {}
 
 def create_game(chat_id):
     games[chat_id] = {
         "players": [],
         "status": "waiting",
-        "scores": {},
+        "mode": None,
         "current_batter": None,
         "current_bowler": None,
         "bowling_number": None,
         "start_time": time.time(),
-        "game_over": False,  # Add game over flag
-        "winner": None       # Add winner field
+        "game_over": False,
+        "winner": None
     }
 
 def join_game(chat_id, user):
@@ -31,11 +29,11 @@ def join_game(chat_id, user):
         "id": user.id,
         "name": user.first_name,
         "username": user.username,
-        "score": 0,  # Changed from "runs" to "score" for consistency
+        "score": 0,  # Using 'score' instead of 'runs'
         "balls": 0,
         "fours": 0,
         "sixes": 0,
-        "out": False,  # Add out status
+        "out": False,
         "history": []
     })
     return True
@@ -112,18 +110,5 @@ def play_ball(chat_id, bat_number):
     
     return result
 
-def get_player_stats(player):
-    """Get formatted player statistics"""
-    strike_rate = 0
-    if player.get("balls", 0) > 0:
-        strike_rate = (player.get("score", 0) / player["balls"]) * 100
-    
-    return {
-        "name": player["name"],
-        "runs": player.get("score", 0),
-        "balls": player.get("balls", 0),
-        "fours": player.get("fours", 0),
-        "sixes": player.get("sixes", 0),
-        "strike_rate": round(strike_rate, 2),
-        "out": player.get("out", False)
-    }
+def get_game(chat_id):
+    return games.get(chat_id)
