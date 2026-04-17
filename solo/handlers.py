@@ -1,4 +1,4 @@
-# handlers.py - Final Complete Working Version
+# handlers.py - 2 Minutes Auto Start, Unlimited Players
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -127,39 +127,47 @@ Solo Play - 3 Ball"""
         
         asyncio.create_task(start_join_timer(client, chat_id))
 
-    # ================= JOIN TIMER =================
+    # ================= JOIN TIMER (2 MINUTES AUTO START) =================
     async def start_join_timer(client, chat_id):
+        # 2 minutes = 120 seconds
+        # Warning at 1 minute (60 seconds)
         await asyncio.sleep(60)
         
         game = games.get(chat_id)
         if game and game["status"] == "waiting":
-            await client.send_message(chat_id, "1 minute left only, everyone /joingame fast!!")
+            players_count = len(game.get("players", []))
+            await client.send_message(chat_id, f"1 minute left! {players_count} players joined. Send /joingame to join!")
         
+        # Warning at 30 seconds
         await asyncio.sleep(30)
         
         game = games.get(chat_id)
         if game and game["status"] == "waiting":
-            await client.send_message(chat_id, "30 seconds left only, everyone /joingame fast!!")
+            players_count = len(game.get("players", []))
+            await client.send_message(chat_id, f"30 seconds left! {players_count} players joined. /joingame fast!!")
         
+        # Warning at 10 seconds
         await asyncio.sleep(20)
         
         game = games.get(chat_id)
         if game and game["status"] == "waiting":
-            await client.send_message(chat_id, "Last 10 seconds left only, /joingame !!")
+            players_count = len(game.get("players", []))
+            await client.send_message(chat_id, f"Last 10 seconds! {players_count} players joined. /joingame !!")
         
+        # Final 10 seconds wait
         await asyncio.sleep(10)
         
+        # AUTO START - Time's up
         game = games.get(chat_id)
         if game and game["status"] == "waiting":
             players_count = len(game.get("players", []))
             
-            if players_count < 4:
-                await client.send_message(chat_id, "Minimum 4 players required to start the game! 😭💔")
-                await asyncio.sleep(2)
-                await client.send_message(chat_id, "⚠️ Failed to start the game.")
+            if players_count < 1:
+                await client.send_message(chat_id, "No players joined! Game cancelled.")
                 if chat_id in games:
                     del games[chat_id]
             else:
+                await client.send_message(chat_id, f"Time's up! Starting game with {players_count} players...")
                 await start_game_match(client, chat_id)
 
     # ================= VOTE SYSTEM =================
@@ -275,15 +283,16 @@ Voters:
             game = games[chat_id]
             players_count = len(game["players"])
             await message.reply(f"{message.from_user.first_name}, you've joined the game! (Player {players_count})")
-            
-            if players_count >= 4:
-                await message.reply("Enough players! Starting game...")
-                await start_game_match(client, chat_id)
 
     # ================= START GAME MATCH =================
     async def start_game_match(client, chat_id):
         game = games.get(chat_id)
         if not game or game["status"] != "waiting":
+            return
+        
+        players_count = len(game["players"])
+        if players_count < 1:
+            await client.send_message(chat_id, "No players to start the game!")
             return
         
         start_match(chat_id)
