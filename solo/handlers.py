@@ -1,4 +1,4 @@
-# handlers.py - Fixed Ball Selection Menu
+# handlers.py - Final No Emoji, No Refresh/Force Start
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -37,17 +37,17 @@ def register_handlers(app):
     # ================= SELECT GAME MENU =================
     async def select_game_menu(client, message):
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🎯 Solo", callback_data="mode_solo"), InlineKeyboardButton("👥 Team", callback_data="mode_team")],
-            [InlineKeyboardButton("💰 Start Auction", callback_data="mode_auction"), InlineKeyboardButton("🏆 Tournament", callback_data="mode_tournament")],
-            [InlineKeyboardButton("❌ Cancel", callback_data="mode_cancel")]
+            [InlineKeyboardButton("Solo", callback_data="mode_solo"), InlineKeyboardButton("Team", callback_data="mode_team")],
+            [InlineKeyboardButton("Start Auction", callback_data="mode_auction"), InlineKeyboardButton("Tournament Mode", callback_data="mode_tournament")],
+            [InlineKeyboardButton("Cancel", callback_data="mode_cancel")]
         ])
         
-        caption = """**SOLO TREE COMMUNITY**
+        caption = """SOLO TREE COMMUNITY
 
-**SELECT GAME**
+SELECT GAME
 
-🎯 Solo Mode
-👥 Team Match
+Solo Mode
+Team Match
 
 Select game mode:"""
         
@@ -67,32 +67,30 @@ Select game mode:"""
             return
         
         if action in ["team", "auction", "tournament"]:
-            await callback.answer(f"🚧 {action} mode coming soon!", show_alert=True)
+            await callback.answer(f"{action} mode coming soon!", show_alert=True)
             return
         
         if action == "solo":
             await ball_selection_menu(client, callback)
 
-    # ================= BALL SELECTION MENU (DELETE OLD, SEND NEW) =================
+    # ================= BALL SELECTION MENU =================
     async def ball_selection_menu(client, callback):
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("⚾ Solo Play - 1 Ball", callback_data="ball_1")],
-            [InlineKeyboardButton("🏏 Solo Play - 3 Ball", callback_data="ball_3")]
+            [InlineKeyboardButton("Solo Play - 1 Ball", callback_data="ball_1")],
+            [InlineKeyboardButton("Solo Play - 3 Ball", callback_data="ball_3")]
         ])
         
-        caption = """**SOLO TREE COMMUNITY**
+        caption = """SOLO TREE COMMUNITY
 
-**SOLO PLAY MATCH**
+SOLO PLAY MATCH
 
-**Choose the Bowling mode:**
+Choose the Bowling mode:
 
-⚾ Solo Play - 1 Ball
-🏏 Solo Play - 3 Ball"""
+Solo Play - 1 Ball
+Solo Play - 3 Ball"""
         
-        # Delete the old message (SELECT GAME wali)
         await callback.message.delete()
         
-        # Send new message with SOLO PLAY image
         try:
             await callback.message.reply_photo(
                 SOLO_PLAY_IMG,
@@ -124,13 +122,7 @@ Select game mode:"""
         
         await client.send_message(
             chat_id,
-            f"🎉 **Solo Mode Activated!** ({ball_mode} Ball{'s' if ball_mode > 1 else ''})\n\n"
-            "📝 Send `/joingame` to join\n"
-            f"⏰ Auto-start in {JOINING_TIMER_SECONDS//60} minutes",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")],
-                [InlineKeyboardButton("🚀 Force Start", callback_data="force_start")]
-            ])
+            f"Game created! Join the game using /joingame ({JOINING_TIMER_SECONDS//60} minutes to join)\n⏰"
         )
         asyncio.create_task(auto_start(client, chat_id))
 
@@ -139,12 +131,12 @@ Select game mode:"""
         chat_id = message.chat.id
         
         if chat_id in active_votes and active_votes[chat_id].get("active"):
-            await message.reply(f"🗳️ Voting in progress! Votes: {active_votes[chat_id]['count']}/3")
+            await message.reply(f"Voting in progress! Votes: {active_votes[chat_id]['count']}/3")
             return
         
         active_votes[chat_id] = {"active": True, "count": 0, "users": [], "msg_id": None}
         
-        caption = """**VOTING REQUIRED!**
+        caption = """VOTING REQUIRED!
 
 You are not an admin. 3 votes needed.
 
@@ -154,12 +146,12 @@ Current votes: 0/3"""
             msg = await message.reply_photo(
                 VOTE_IMG, 
                 caption=caption,
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote", callback_data="vote")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Vote to Start", callback_data="vote")]])
             )
         except:
             msg = await message.reply(
                 caption,
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote", callback_data="vote")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Vote to Start", callback_data="vote")]])
             )
         
         active_votes[chat_id]["msg_id"] = msg.id
@@ -194,26 +186,26 @@ Current votes: 0/3"""
             await callback.message.delete()
             await select_game_menu(client, callback.message)
             vote["active"] = False
-            await callback.answer("✅ Voting successful!")
+            await callback.answer("Voting successful!")
         else:
-            caption = f"""**VOTING REQUIRED!**
+            caption = f"""VOTING REQUIRED!
 
 You are not an admin. 3 votes needed.
 
 Current votes: {vote['count']}/3
 
-**Voters:**
+Voters:
 {chr(10).join(voters)}"""
             
             try:
                 await callback.message.edit_caption(
                     caption=caption,
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote", callback_data="vote")]])
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Vote to Start", callback_data="vote")]])
                 )
             except:
                 await callback.message.edit_text(
                     caption,
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote", callback_data="vote")]])
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Vote to Start", callback_data="vote")]])
                 )
             await callback.answer(f"Voted! ({vote['count']}/3)")
 
@@ -225,40 +217,11 @@ Current votes: {vote['count']}/3
             try:
                 await client.edit_message_caption(
                     chat_id, vote["msg_id"],
-                    caption=f"⚠️ Voting expired! Got {vote['count']}/3 votes.\nUse /start again."
+                    caption=f"Voting expired! Got {vote['count']}/3 votes.\nUse /start again."
                 )
             except:
                 pass
             vote["active"] = False
-
-    # ================= REFRESH =================
-    @app.on_callback_query(filters.regex("^refresh$"))
-    async def refresh_handler(client, callback):
-        chat_id = callback.message.chat.id
-        game = games.get(chat_id)
-        if not game:
-            return await callback.answer("No game!", show_alert=True)
-        
-        players = game.get("players", [])
-        ball_mode = game.get("ball_mode", 1)
-        text = f"🎉 Solo Mode Active! ({ball_mode} Ball)\n\nPlayers ({len(players)}):\n" + "\n".join([f"• {p['name']}" for p in players]) or "• No players"
-        await callback.message.edit_text(
-            text,
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")],
-                [InlineKeyboardButton("🚀 Force Start", callback_data="force_start")]
-            ])
-        )
-
-    # ================= FORCE START =================
-    @app.on_callback_query(filters.regex("^force_start$"))
-    async def force_start_handler(client, callback):
-        chat_id = callback.message.chat.id
-        game = games.get(chat_id)
-        if not game or len(game.get("players", [])) < 1:
-            return await callback.answer("Need at least 1 player!", show_alert=True)
-        await callback.message.edit_text("🚀 Starting game...")
-        await start_match(client, chat_id)
 
     # ================= JOIN =================
     @app.on_message(filters.command("joingame") & filters.group)
@@ -267,14 +230,14 @@ Current votes: {vote['count']}/3
         game = games.get(chat_id)
         
         if not game:
-            return await message.reply("❌ No active game! Use /start")
+            return await message.reply("No active game! Use /start")
         
         if game.get("status") != "waiting":
-            return await message.reply("❌ Game already started!")
+            return await message.reply("Game already started!")
         
         if join_game(chat_id, message.from_user):
             game = games[chat_id]
-            await message.reply(f"🎉 {message.from_user.first_name} joined! ({len(game['players'])} players)")
+            await message.reply(f"{message.from_user.first_name} joined! ({len(game['players'])} players)")
 
     # ================= AUTO START =================
     async def auto_start(client, chat_id):
@@ -293,13 +256,13 @@ Current votes: {vote['count']}/3
         game = games[chat_id]
         players = game["players"]
         
-        text = "👑 **Match Started!**\n\n👤 **Players:**\n" + "\n".join([f"{i+1}. {p['name']}" for i, p in enumerate(players)])
+        text = "Match Started!\n\nPlayers:\n" + "\n".join([f"{i+1}. {p['name']}" for i, p in enumerate(players)])
         await client.send_message(chat_id, text)
         
         await client.send_video(
             chat_id, BOWLING_VIDEO,
             caption=BOWLING_MESSAGE.format(bowler=game["current_bowler"]["name"]),
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎯 Bowling", callback_data="bowl")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Bowling", callback_data="bowl")]])
         )
 
     # ================= BOWLING BUTTON =================
@@ -316,7 +279,7 @@ Current votes: {vote['count']}/3
         
         await callback.answer("Check DM!")
         try:
-            await client.send_message(user.id, "🎯 Send bowling number (1-6)")
+            await client.send_message(user.id, "Send bowling number (1-6)")
         except:
             await callback.answer("Open DM first!", show_alert=True)
 
@@ -337,9 +300,9 @@ Current votes: {vote['count']}/3
             set_bowling(chat_id, int(text))
             await client.send_video(
                 chat_id, BATTING_VIDEO,
-                caption=f"🏏 Batter: {game['current_batter']['name']}\n🔥 Send number (1-6) in GROUP"
+                caption=f"Batter: {game['current_batter']['name']}\nSend number (1-6) in GROUP"
             )
-            await message.reply("✅ Bowling number sent!")
+            await message.reply("Bowling number sent!")
             break
 
     # ================= BATTING =================
@@ -351,7 +314,7 @@ Current votes: {vote['count']}/3
         if not game or game.get("status") != "playing":
             return
         if game.get("bowling_number") is None:
-            return await message.reply("⏳ Waiting for bowler!")
+            return await message.reply("Waiting for bowler!")
         
         batter = game.get("current_batter")
         if not batter or message.from_user.id != batter.get("id"):
@@ -386,7 +349,7 @@ Current votes: {vote['count']}/3
         await message.reply(build_scoreboard(game["players"]))
         
         if game.get("game_over"):
-            return await message.reply(f"🏆 Game Over! {game['winner']['name']} wins!")
+            return await message.reply(f"Game Over! {game['winner']['name']} wins!")
         
         players = game["players"]
         idx = next((i for i, p in enumerate(players) if p["id"] == batter["id"]), 0)
@@ -404,7 +367,7 @@ Current votes: {vote['count']}/3
         
         try:
             await message.reply_video(BOWLING_VIDEO, caption=BOWLING_MESSAGE.format(bowler=game["current_bowler"]["name"]),
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎯 Bowling", callback_data="bowl")]]))
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Bowling", callback_data="bowl")]]))
         except:
             await message.reply(BOWLING_MESSAGE.format(bowler=game["current_bowler"]["name"]),
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎯 Bowling", callback_data="bowl")]]))
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Bowling", callback_data="bowl")]]))
