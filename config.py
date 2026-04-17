@@ -1,4 +1,5 @@
-# config.py
+# config.py - Final Complete Version
+
 import os
 from dotenv import load_dotenv
 
@@ -31,6 +32,7 @@ IMAGES_PATH = os.path.join(ASSETS_PATH, "images")
 
 # ========== GAME IMAGES (Local) ==========
 GAME_MENU_IMAGE = os.path.join(IMAGES_PATH, "game_menu.jpg")
+SELECT_GAME_IMAGE = os.path.join(IMAGES_PATH, "select_game.jpg")  # SELECT GAME wali image
 SOLO_GAME_START_IMAGE = os.path.join(IMAGES_PATH, "game_start.jpg")
 IMAGE_URL = os.path.join(IMAGES_PATH, "default.jpg")
 HOST_IMAGE_URL = os.path.join(IMAGES_PATH, "host.jpg")
@@ -43,6 +45,7 @@ HOST_IMAGE_URL_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 GAME_INSTRUCTIONS_IMAGE_URL_FALLBACK = "https://files.catbox.moe/iq4758.jpg"
 RESULT_IMAGE_URL_FALLBACK = "https://graph.org/file/17971526dfefa9e20863b-44207fd3a022c59c53.jpg"
 SOLO_GAME_START_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
+SELECT_GAME_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"  # Fallback for select game image
 
 # ========== SOLO MODE VIDEOS (Local) ==========
 BOWLING_VIDEO_PATH = os.path.join(VIDEOS_PATH, "bowling.mp4")
@@ -84,6 +87,7 @@ def get_video_file(video_path, video_url):
 
 # Pre-define images with fallback
 GAME_MENU = get_image_file(GAME_MENU_IMAGE, IMAGE_URL_FALLBACK)
+SELECT_GAME_IMG = get_image_file(SELECT_GAME_IMAGE, SELECT_GAME_IMAGE_FALLBACK)  # SELECT GAME image
 SOLO_START_IMAGE = get_image_file(SOLO_GAME_START_IMAGE, SOLO_GAME_START_IMAGE_FALLBACK)
 
 # Pre-define videos with fallback
