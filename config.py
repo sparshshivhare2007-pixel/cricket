@@ -35,11 +35,11 @@ BOWLING_VIDEO_URL = "https://files.catbox.moe/r75e19.mp4"
 BATTING_VIDEO_URL = "https://files.catbox.moe/26qdaw.mp4"
 OUT_VIDEO_URL = "https://files.catbox.moe/7ixfhp.mp4"
 
-# RUN VIDEOS (ADD YOUR LINKS)
+# RUN VIDEOS
 RUN_1_VIDEO_URL = "https://graph.org/file/88e77efecd24d39af3918-6684feebb8fe546a95.mp4"
 RUN_2_VIDEO_URL = "https://graph.org/file/668a1fe8632c5a2a00d9d-61cbe9729b733341ff.mp4"
 RUN_3_VIDEO_URL = "https://graph.org/file/d913fa6143c8a338055ff-7fd548d599f4389c5f.mp4"
-FOUR_VIDEO_URL = "https://graph.org/file/f122a1d001bee672c3717-a8acfd94740ab619f9.mp4"
+FOUR_VIDEO_URL = "https://graph.org/file/f122a1d001bee672c3717-a8acfd94740ab619f9f.mp4"
 RUN_5_VIDEO_URL = "https://graph.org/file/4bbb87b5d33ac6bed64e5-841214f4c3d85a6dd1.mp4"
 SIX_VIDEO_URL = "https://graph.org/file/5652ee0d8c02e04118b9e-ec070692c1c407ce98.mp4"
 
@@ -50,26 +50,18 @@ JOINING_TIMER_SECONDS = 120
 # ========== SOLO ICONS ==========
 SOLO_ICONS = ["⚪", "🟠", "🟢", "🟣", "🔵", "🟡", "⚫", "🔴"]
 
-# ========== GAME MESSAGES ==========
+# ========== MESSAGES ==========
 
-# START VOTING
 START_VOTE_MESSAGE = """
 🗳️ Voting Required!
-
-At least 3 members must vote to start the game.
-
-Click below 👇
+At least 3 members must vote.
 """
 
-# GAME CREATED
 GAME_CREATED_MESSAGE = """
 🎉 Game created!
-
-Join the game using /joingame  
-(2 minutes to join) ⏰
+Use /joingame to join.
 """
 
-# FINAL PLAYER LIST
 FINAL_PLAYER_LIST = """
 👑 Unknown Host
 
@@ -78,50 +70,42 @@ FINAL_PLAYER_LIST = """
 {players}
 """
 
-# GAME START
 GAME_STARTING_MESSAGE = """
 🚀 Game starting...
-
-Get ready players!
 """
 
-# CURRENT BATTER
 CURRENT_BATTER_MESSAGE = """
-Current batter: {batter}
-
-Send Your number:
+🏏 Current batter: {batter}
+Send number (1-6)
 """
 
-# BOWLING MESSAGE
 BOWLING_MESSAGE = """
-{bowler} now you can send number on bot pm, You have 1 min.
+🎯 {bowler}, send bowling number (1-6)
+⏰ You have 60 seconds
 """
 
-# WARNING
 BOWLING_WARNING_30 = """
-⚠️ Warning: {bowler}, you have 30 seconds left to send a number!
+⚠️ {bowler}, 30 seconds left!
 """
 
-# INVALID INPUT
-INVALID_NUMBER = "Send number between 1-6 ❌"
-NOT_YOUR_TURN = "Not your turn ❌"
+INVALID_NUMBER = "❌ Send number between 1-6"
+NOT_YOUR_TURN = "❌ Not your turn"
 
-# RESULT MESSAGES
+# ================= FIXED RUN MESSAGE =================
 RUN_MESSAGE = """
-🏏 {batter} scored {runs} run{'s' if runs > 1 else ''}!
+🏏 {batter} scored {runs}!
 
-{batter}: {bat}
-{bowler}: {bowl}
+Bat: {bat}
+Bowler: {bowler} | Bowl: {bowl}
 """
 
 OUT_MESSAGE = """
 ❌ OUT!
 
-{batter}: {bat}
-{bowler}: {bowl}
+Bat: {bat}
+Bowler: {bowler} | Bowl: {bowl}
 """
 
-# NEXT TURN
 NEXT_TURN_MESSAGE = """
 🎮 Next Turn:
 
@@ -129,15 +113,4 @@ NEXT_TURN_MESSAGE = """
 🎯 Bowler: {bowler}
 """
 
-# MATCH END
-MATCH_END_MESSAGE = """
-🏁 Match Ended!
-"""
-
-# ========== SOLO SCOREBOARD FORMAT ==========
-
-SCOREBOARD_HEADER = "─────⊱ Sᴏʟᴏ Pʟᴀʏᴇʀ ⊰────\n\n"
-
-PLAYER_LINE = "{index}. {icon} {name} = {runs}({balls})\n"
-PLAYER_STATS = "    ╰⊚ 4️⃣s: {fours:02}, 6️⃣s: {sixes:02} - ID: `{user_id}`\n"
-PLAYER_HISTORY = "      ╰⊚ ({history})\n\n"
+MATCH_END_MESSAGE = "🏁 Match Ended!"
