@@ -1,9 +1,10 @@
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+import asyncio
+
 from config import *
 from solo.game import *
 from solo.scoreboard import build_scoreboard
-import asyncio
 
 votes = {}
 
@@ -17,12 +18,10 @@ async def auto_start_game(client, chat_id):
 
     players = game["players"]
 
-    if len(players) < 1:
-        await client.send_message(chat_id, "❌ Not enough players")
-        return
+    if not players:
+        return await client.send_message(chat_id, "❌ Not enough players")
 
     text = "👑 Unknown Host\n\n👤 Players\n\n"
-
     for i, p in enumerate(players, 1):
         name = f"@{p.get('username')}" if p.get("username") else p["name"]
         text += f"{i}. {name}\n"
@@ -40,33 +39,39 @@ async def auto_start_game(client, chat_id):
         caption=BOWLING_MESSAGE.format(
             bowler=game["current_bowler"]["name"]
         ),
-        reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Bowling", callback_data="start_bowling")]]
-        )
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("Bowling", callback_data="start_bowling")]
+        ])
     )
 
 
 def register_handlers(app):
 
-    # ================= FIXED /START (GROUP SUPPORT) =================
+    # ================= START (GROUP FIXED) =================
     @app.on_message(filters.command("start"))
     async def start(client, message: Message):
 
-        chat_id = message.chat.id
+        chat = message.chat
+        chat_id = chat.id
 
-        # only group allowed
-        if message.chat.type not in ["group", "supergroup"]:
-            return await message.reply("❌ Use this in group")
-
-        create_game(chat_id)
-        votes[chat_id] = {"count": 0, "users": []}
-
-        await message.reply(
-            "🗳️ Voting Started!\nNeed 3 votes to begin",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Vote", callback_data="vote_start")]]
+        # PRIVATE
+        if chat.type == "private":
+            return await message.reply(
+                "👋 Add me in a group to play cricket 🏏"
             )
-        )
+
+        # GROUP / SUPERGROUP
+        if chat.type in ["group", "supergroup"]:
+
+            create_game(chat_id)
+            votes[chat_id] = {"count": 0, "users": []}
+
+            await message.reply(
+                "🗳️ Voting Started!\nNeed 3 votes to start game",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("Vote 🏏", callback_data="vote_start")]
+                ])
+            )
 
     # ================= VOTE =================
     @app.on_callback_query(filters.regex("^vote_start$"))
@@ -93,9 +98,9 @@ def register_handlers(app):
 
         await callback.message.edit_text(
             f"🗳️ Voting\n\nVotes: {data['count']}/3\n\n{voters}",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Vote", callback_data="vote_start")]]
-            )
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("Vote 🏏", callback_data="vote_start")]
+            ])
         )
 
         if data["count"] >= 3:
@@ -125,10 +130,7 @@ def register_handlers(app):
 
         await callback.message.delete()
 
-        await client.send_message(
-            chat_id,
-            "🎉 Game Started\nUse /joingame"
-        )
+        await client.send_message(chat_id, "🎉 Game Started\nUse /joingame")
 
         asyncio.create_task(auto_start_game(client, chat_id))
 
@@ -163,7 +165,7 @@ def register_handlers(app):
         try:
             await client.send_message(
                 user.id,
-                "🎯 Send bowling number (1-6)"
+                "🎯 Send number (1-6)"
             )
         except:
             await callback.answer("Open DM first ❌", show_alert=True)
@@ -199,8 +201,8 @@ def register_handlers(app):
                 caption=f"🏏 Batter: {game['current_batter']['name']}\nSend number (1-6)"
             )
 
-    # ================= BATTING =================
-    @app.on_message(filters.group & filters.text)
+    # ================= BATTING (FINAL FIXED) =================
+    @app.on_message(filters.group & filters.text & ~filters.bot)
     async def batting(client, message: Message):
 
         chat_id = message.chat.id
@@ -210,8 +212,10 @@ def register_handlers(app):
             return
 
         batter = game.get("current_batter")
+        if not batter:
+            return
 
-        if not batter or message.from_user.id != batter["id"]:
+        if message.from_user.id != batter["id"]:
             return
 
         text = (message.text or "").strip()
@@ -227,22 +231,20 @@ def register_handlers(app):
         result = play_ball(chat_id, bat)
         bow = game["bowling_number"]
 
-        # OUT
+        runs = result["runs"] if result["type"] != "out" else 0
+        runs_text = f"{runs} run" if runs == 1 else f"{runs} runs"
+
         if result["type"] == "out":
             await message.reply_video(
                 OUT_VIDEO_URL,
                 caption=OUT_MESSAGE.format(
+                    batter=batter["name"],
                     bat=bat,
                     bowler=game["current_bowler"]["name"],
                     bowl=bow
                 )
             )
-
-        # RUN
         else:
-            runs = result["runs"]
-            runs_text = f"{runs} run" if runs == 1 else f"{runs} runs"
-
             await message.reply(
                 RUN_MESSAGE.format(
                     batter=batter["name"],
@@ -270,7 +272,7 @@ def register_handlers(app):
             caption=BOWLING_MESSAGE.format(
                 bowler=game["current_bowler"]["name"]
             ),
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Bowling", callback_data="start_bowling")]]
-            )
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("Bowling", callback_data="start_bowling")]
+            ])
         )
