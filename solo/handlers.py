@@ -1,4 +1,4 @@
-# handlers.py - Complete Fixed Version
+# handlers.py - Final Complete Working Version
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -160,7 +160,7 @@ Solo Play - 3 Ball"""
                 if chat_id in games:
                     del games[chat_id]
             else:
-                await start_match(client, chat_id)
+                await start_game_match(client, chat_id)
 
     # ================= VOTE SYSTEM =================
     async def vote_system(client, message):
@@ -278,10 +278,10 @@ Voters:
             
             if players_count >= 4:
                 await message.reply("Enough players! Starting game...")
-                await start_match(client, chat_id)
+                await start_game_match(client, chat_id)
 
-    # ================= START MATCH =================
-    async def start_match(client, chat_id):
+    # ================= START GAME MATCH =================
+    async def start_game_match(client, chat_id):
         game = games.get(chat_id)
         if not game or game["status"] != "waiting":
             return
@@ -370,6 +370,11 @@ Voters:
             except:
                 await message.reply(OUT_MESSAGE.format(
                     batter=batter["name"], bat=bat, bowler=game["current_bowler"]["name"], bowl=bow))
+            
+            if game.get("game_over"):
+                return await message.reply(f"Game Over! {game['winner']['name']} wins!")
+            
+            await message.reply(f"New batter: {game['current_batter']['name']}")
         else:
             try:
                 await message.reply_video(get_run_video(result["runs"]), caption=RUN_MESSAGE.format(
@@ -385,16 +390,6 @@ Voters:
         if game.get("game_over"):
             return await message.reply(f"Game Over! {game['winner']['name']} wins!")
         
-        # Rotate batter if out or continue with same batter
-        if result["type"] == "out":
-            # Batter is out, next batter already set in play_ball
-            if not game.get("game_over"):
-                await message.reply(f"New batter: {game['current_batter']['name']}")
-        else:
-            # Same batter continues
-            pass
-        
-        # Check if bowler changed
         await message.reply(NEXT_TURN_MESSAGE.format(
             batter=game["current_batter"]["name"], bowler=game["current_bowler"]["name"]))
         
