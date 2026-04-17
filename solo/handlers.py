@@ -1,4 +1,4 @@
-# handlers.py - Fixed with Proper Order (Batter then Bowler)
+# handlers.py - Fixed (No Next Turn message)
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -297,7 +297,7 @@ Voters:
         players_text = "Match Started!\n\nPlayers:\n" + "\n".join([f"{i+1}. {p['name']}" for i, p in enumerate(players)])
         await client.send_message(chat_id, players_text)
         
-        # STEP 1: Send batter mention first
+        # Send batter mention
         batter = game["current_batter"]
         await client.send_message(
             chat_id,
@@ -305,7 +305,7 @@ Voters:
             disable_web_page_preview=True
         )
         
-        # STEP 2: Send bowler mention
+        # Send bowler mention
         bowler = game["current_bowler"]
         await client.send_message(
             chat_id,
@@ -313,7 +313,7 @@ Voters:
             disable_web_page_preview=True
         )
         
-        # STEP 3: Send bowling video with button
+        # Send bowling video with button
         await asyncio.sleep(1)
         await client.send_video(
             chat_id, 
@@ -404,9 +404,23 @@ Voters:
             if game.get("game_over"):
                 return await message.reply(f"Game Over! {game['winner']['name']} wins!")
             
+            # NEW BATTER - Clickable mention
             new_batter = game["current_batter"]
-            await message.reply(f"New batter: [{new_batter['name']}](tg://user?id={new_batter['id']})")
+            await message.reply(f"New batter: [{new_batter['name']}](tg://user?id={new_batter['id']})", disable_web_page_preview=True)
+            
+            # Check if bowler changed after out
+            new_bowler = game["current_bowler"]
+            
+            # Send bowling video for next ball
+            await asyncio.sleep(1)
+            await message.reply_video(
+                BOWLING_VIDEO,
+                caption=f"[{new_bowler['name']}](tg://user?id={new_bowler['id']}) now you can send number on bot pm, You have 1 min.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Bowling", callback_data="bowl")]])
+            )
+            
         else:
+            # RUN scored - not out
             try:
                 await message.reply_video(get_run_video(result["runs"]), caption=RUN_MESSAGE.format(
                     batter=batter["name"], runs=f"{result['runs']} run{'s' if result['runs'] > 1 else ''}",
@@ -415,20 +429,30 @@ Voters:
                 await message.reply(RUN_MESSAGE.format(
                     batter=batter["name"], runs=f"{result['runs']} run{'s' if result['runs'] > 1 else ''}",
                     bat=bat, bowler=bowler["name"], bowl=bow))
+            
+            # Check if bowler completed his overs (3 balls)
+            ball_mode = game.get("ball_mode", 3)
+            if game["current_bowler_balls"] >= ball_mode:
+                # Bowler changed
+                new_bowler = game["current_bowler"]
+                await message.reply(f"Bowler changed! Now bowling: [{new_bowler['name']}](tg://user?id={new_bowler['id']})", disable_web_page_preview=True)
+                
+                # Send bowling video for new bowler
+                await asyncio.sleep(1)
+                await message.reply_video(
+                    BOWLING_VIDEO,
+                    caption=f"[{new_bowler['name']}](tg://user?id={new_bowler['id']}) now you can send number on bot pm, You have 1 min.",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Bowling", callback_data="bowl")]])
+                )
+            else:
+                # Same bowler continues - send batting video for next ball
+                await message.reply_video(
+                    BATTING_VIDEO,
+                    caption=f"Hey [{batter['name']}](tg://user?id={batter['id']}), now you're batting! Send number (1-6) in GROUP"
+                )
         
+        # Send scoreboard after each ball
         await message.reply(build_scoreboard(game["players"]))
         
         if game.get("game_over"):
             return await message.reply(f"Game Over! {game['winner']['name']} wins!")
-        
-        # Send next turn with mentions
-        new_batter = game["current_batter"]
-        new_bowler = game["current_bowler"]
-        
-        await message.reply(f"Next turn:\nBatter: [{new_batter['name']}](tg://user?id={new_batter['id']})\nBowler: [{new_bowler['name']}](tg://user?id={new_bowler['id']})")
-        
-        await message.reply_video(
-            BOWLING_VIDEO,
-            caption=f"[{new_bowler['name']}](tg://user?id={new_bowler['id']}) now you can send number on bot pm, You have 1 min.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Bowling", callback_data="bowl")]])
-        )
