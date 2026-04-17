@@ -1,7 +1,7 @@
-# handlers.py - Final Complete
+# handlers.py - Fixed Ball Selection Menu
 
 from pyrogram import filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, InputMediaPhoto  # Added InputMediaPhoto
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pyrogram.enums import ChatMemberStatus
 from config import *
 from solo.game import *
@@ -73,7 +73,7 @@ Select game mode:"""
         if action == "solo":
             await ball_selection_menu(client, callback)
 
-    # ================= BALL SELECTION MENU (WITH SOLO PLAY IMAGE) =================
+    # ================= BALL SELECTION MENU (DELETE OLD, SEND NEW) =================
     async def ball_selection_menu(client, callback):
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("⚾ Solo Play - 1 Ball", callback_data="ball_1")],
@@ -89,17 +89,20 @@ Select game mode:"""
 ⚾ Solo Play - 1 Ball
 🏏 Solo Play - 3 Ball"""
         
+        # Delete the old message (SELECT GAME wali)
+        await callback.message.delete()
+        
+        # Send new message with SOLO PLAY image
         try:
-            await callback.message.edit_media(
-                media=InputMediaPhoto(
-                    media=SOLO_PLAY_IMG,
-                    caption=caption
-                ),
+            await callback.message.reply_photo(
+                SOLO_PLAY_IMG,
+                caption=caption,
                 reply_markup=keyboard
             )
-        except:
-            await callback.message.edit_caption(
-                caption=caption,
+        except Exception as e:
+            print(f"Error sending solo play image: {e}")
+            await callback.message.reply(
+                caption,
                 reply_markup=keyboard
             )
         await callback.answer()
