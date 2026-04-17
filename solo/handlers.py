@@ -3,17 +3,30 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from config import *
 from solo.game import *
 from solo.scoreboard import build_scoreboard
-import random
+
+votes = {}
 
 def register_handlers(app):
 
     # ================= START =================
     @app.on_message(filters.command("start") & filters.group)
     async def start(client, message: Message):
-        create_game(message.chat.id)
+        chat_id = message.chat.id
+
+        create_game(chat_id)
+
+        votes[chat_id] = {
+            "count": 0,
+            "users": []
+        }
 
         await message.reply(
-            START_VOTE_MESSAGE,
+            """🗳️ Voting in Progress:
+
+Current votes: 0/3
+
+Click 'Vote to Start' to participate!
+""",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("Vote to Start", callback_data="vote_start")]]
             )
@@ -22,13 +35,76 @@ def register_handlers(app):
     # ================= VOTE =================
     @app.on_callback_query(filters.regex("vote_start"))
     async def vote(client, callback):
-        await callback.message.edit("✅ Voting successful!\n\nSelect Mode")
+        chat_id = callback.message.chat.id
+        user = callback.from_user
+
+        data = votes.get(chat_id)
+
+        if user.id in data["users"]:
+            return await callback.answer("Already voted ❌", show_alert=True)
+
+        data["users"].append(user.id)
+        data["count"] += 1
+
+        # voters list
+        voters = ""
+        for uid in data["users"]:
+            u = await client.get_users(uid)
+            voters += f"\n{u.first_name}"
+
+        text = f"""🗳️ Voting in Progress:
+
+Current votes: {data['count']}/3
+Voters:{voters}
+
+Click 'Vote to Start' to participate!
+"""
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("Vote to Start", callback_data="vote_start")]]
+            )
+        )
+
+        # COMPLETE
+        if data["count"] >= 3:
+            await callback.message.edit_text(
+                "✅ Voting successful! The game will start shortly."
+            )
+
+            # MODE SELECT UI
+            await client.send_photo(
+                chat_id,
+                SOLO_GAME_START_IMAGE,
+                caption="🥎 Choose the Bowling mode:",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("Solo Play - 1 Ball", callback_data="solo_1")],
+                    [InlineKeyboardButton("Solo Play - 3 Ball", callback_data="solo_3")]
+                ])
+            )
+
+    # ================= MODE SELECT =================
+    @app.on_callback_query(filters.regex("solo_"))
+    async def solo_mode(client, callback):
+        chat_id = callback.message.chat.id
+
+        await callback.message.edit_caption(
+            "🎉 Game created!\n\nJoin the game using /joingame\n(2 minutes ⏰)"
+        )
 
     # ================= JOIN =================
     @app.on_message(filters.command("joingame") & filters.group)
     async def join(client, message: Message):
-        if join_game(message.chat.id, message.from_user):
-            await message.reply(f"🎉 {message.from_user.first_name} joined!")
+        chat_id = message.chat.id
+
+        if join_game(chat_id, message.from_user):
+            game = games[chat_id]
+            player_no = len(game["players"])
+
+            await message.reply(
+                f"🎉 {message.from_user.first_name}, you've joined the game! (Player {player_no}) 👍"
+            )
 
     # ================= START GAME =================
     @app.on_message(filters.command("startgame") & filters.group)
@@ -77,10 +153,7 @@ def register_handlers(app):
                     )
                 )
 
-                await client.send_video(
-                    chat_id,
-                    BATTING_VIDEO_URL
-                )
+                await client.send_video(chat_id, BATTING_VIDEO_URL)
 
     # ================= BATTING =================
     @app.on_message(filters.group & filters.text)
@@ -91,7 +164,6 @@ def register_handlers(app):
         if not game or game["status"] != "playing":
             return
 
-        # only batter allowed
         if message.from_user.id != game["current_batter"]["id"]:
             return
 
@@ -108,7 +180,6 @@ def register_handlers(app):
         batter = game["current_batter"]["name"]
         bowler = game["current_bowler"]["name"]
 
-        # ================= RESULT =================
         if result["type"] == "out":
             await message.reply_video(
                 OUT_VIDEO_URL,
@@ -119,11 +190,9 @@ def register_handlers(app):
                     bowl=bow
                 )
             )
-
         else:
             runs = result["runs"]
 
-            # select video
             video = None
             if runs == 6 and SIX_VIDEO_URL:
                 video = SIX_VIDEO_URL
@@ -149,21 +218,15 @@ def register_handlers(app):
             else:
                 await message.reply(caption)
 
-        # ================= SCOREBOARD =================
         scoreboard = build_scoreboard(game["players"])
         await message.reply(scoreboard)
 
-        # ================= ROTATION =================
         players = game["players"]
-
-        # rotate batter
         current_index = players.index(game["current_batter"])
         next_index = (current_index + 1) % len(players)
 
         game["current_batter"] = players[next_index]
         game["current_bowler"] = players[current_index]
-
-        # reset bowling
         game["bowling_number"] = None
 
         await message.reply(
@@ -173,7 +236,6 @@ def register_handlers(app):
             )
         )
 
-        # next bowling
         await message.reply_video(
             BOWLING_VIDEO_URL,
             caption=BOWLING_MESSAGE.format(
