@@ -54,7 +54,6 @@ def register_handlers(app):
         chat_id = message.chat.id
 
         create_game(chat_id)
-
         votes[chat_id] = {"count": 0, "users": []}
 
         await message.reply(
@@ -81,8 +80,8 @@ def register_handlers(app):
         data["count"] += 1
 
         voters = "\n".join([
-            f"• {u.first_name}" for u in
-            await asyncio.gather(*[client.get_users(uid) for uid in data["users"]])
+            f"• {u.first_name}"
+            for u in await asyncio.gather(*[client.get_users(uid) for uid in data["users"]])
         ])
 
         text = f"""🗳️ Voting in Progress:
@@ -90,8 +89,6 @@ def register_handlers(app):
 Current votes: {data['count']}/3
 Voters:
 {voters}
-
-Click 'Vote to Start' to participate!
 """
 
         await callback.message.edit_text(
@@ -103,7 +100,7 @@ Click 'Vote to Start' to participate!
 
         if data["count"] >= 3:
             await callback.message.edit_text(
-                "✅ Voting successful! The game will start shortly."
+                "✅ Voting successful! Game starting..."
             )
 
             await asyncio.sleep(1)
@@ -165,7 +162,7 @@ Click 'Vote to Start' to participate!
         try:
             await client.send_message(
                 user.id,
-                "🎯 Bowling Started!\nSend number (1-6)\n⏰ 60 seconds"
+                "🎯 Bowling Started!\nSend number (1-6)"
             )
         except:
             await callback.answer("Open bot in DM first ❌", show_alert=True)
@@ -183,7 +180,7 @@ Click 'Vote to Start' to participate!
             if game["current_bowler"]["id"] != user_id:
                 continue
 
-            text = message.text.strip()
+            text = (message.text or "").strip()
 
             if not text.isdigit():
                 return await message.reply(INVALID_NUMBER)
@@ -199,12 +196,12 @@ Click 'Vote to Start' to participate!
                 BATTING_VIDEO_URL,
                 caption=(
                     f"🏏 Now Batter: {game['current_batter']['name']}\n"
-                    "🔥 Can send number (1-6)!!"
+                    "🔥 Send number (1-6)"
                 )
             )
 
-    # ================= BATTING (FIXED - MAIN ISSUE SOLVED) =================
-    @app.on_message(filters.group & filters.text)
+    # ================= BATTING (FINAL FIXED CORE) =================
+    @app.on_message(filters.group & filters.text & ~filters.bot)
     async def batting(client, message: Message):
         chat_id = message.chat.id
         game = games.get(chat_id)
@@ -212,10 +209,12 @@ Click 'Vote to Start' to participate!
         if not game or game["status"] != "playing":
             return
 
-        if message.from_user.id != game["current_batter"]["id"]:
+        batter = game.get("current_batter")
+
+        if not batter or message.from_user.id != batter["id"]:
             return
 
-        text = message.text.strip()
+        text = (message.text or "").strip()
 
         if not text.isdigit():
             return await message.reply(INVALID_NUMBER)
@@ -228,25 +227,23 @@ Click 'Vote to Start' to participate!
         result = play_ball(chat_id, bat)
         bow = game["bowling_number"]
 
-        # ================= OUT =================
+        # OUT
         if result["type"] == "out":
             await message.reply_video(
                 OUT_VIDEO_URL,
                 caption=OUT_MESSAGE.format(
-                    batter=game["current_batter"]["name"],
+                    batter=batter["name"],
                     bat=bat,
                     bowler=game["current_bowler"]["name"],
                     bowl=bow
                 )
             )
-
-        # ================= RUN =================
         else:
             runs_text = f"{result['runs']} run{'s' if result['runs'] > 1 else ''}"
 
             await message.reply(
                 RUN_MESSAGE.format(
-                    batter=game["current_batter"]["name"],
+                    batter=batter["name"],
                     runs=runs_text,
                     bat=bat,
                     bowler=game["current_bowler"]["name"],
@@ -256,13 +253,14 @@ Click 'Vote to Start' to participate!
 
         await message.reply(build_scoreboard(game["players"]))
 
-        # ================= SAFE ROTATION =================
+        # SAFE ROTATION
         players = game["players"]
 
-        try:
-            cur = players.index(game["current_batter"])
-        except ValueError:
-            cur = 0
+        cur = next(
+            (i for i, p in enumerate(players)
+             if p["id"] == batter["id"]),
+            0
+        )
 
         nxt = (cur + 1) % len(players)
 
