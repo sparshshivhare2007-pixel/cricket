@@ -2,6 +2,7 @@
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from pyrogram.enums import ChatMemberStatus  # ADD THIS IMPORT
 from config import *
 from solo.game import *
 from solo.scoreboard import build_scoreboard
@@ -14,18 +15,22 @@ def get_run_video(runs):
     return run_videos.get(runs, RUN_1_VIDEO)
 
 async def is_admin(client, chat_id, user_id):
-    """Check if user is admin - FIXED VERSION"""
+    """Check if user is admin - FIXED with proper enum comparison"""
     try:
-        # Get chat member info
         member = await client.get_chat_member(chat_id, user_id)
         
         # Print for debugging
         print(f"🔍 User ID: {user_id}")
         print(f"🔍 Status: {member.status}")
-        print(f"🔍 Is admin/creator: {member.status in ['administrator', 'creator']}")
+        print(f"🔍 Status type: {type(member.status)}")
         
-        # Return True if user is creator or administrator
-        return member.status in ["creator", "administrator"]
+        # FIXED: Compare with ChatMemberStatus enum
+        if member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
+            print(f"✅ Is Admin: True")
+            return True
+        
+        print(f"❌ Is Admin: False")
+        return False
     except Exception as e:
         print(f"❌ Error checking admin: {e}")
         return False
@@ -41,9 +46,7 @@ def register_handlers(app):
         print(f"📱 /start command from user: {user_id}")
         print(f"📱 Chat ID: {chat_id}")
         
-        # Check if user is admin
         admin_status = await is_admin(client, chat_id, user_id)
-        print(f"📱 Is Admin: {admin_status}")
         
         if admin_status:
             print("✅ ADMIN - Showing SELECT GAME menu")
