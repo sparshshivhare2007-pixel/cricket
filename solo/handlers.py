@@ -43,21 +43,22 @@ def register_handlers(app):
         
         caption = """**# SOLO TREE COMMUNITY**
 
-**## SELECT GAME**
+**# SELECT GAME**
 
-**### Solo mode**
+**Solo mode**  
 Each bowler bowls 3 balls, the batsman scores runs or gets out, and if out, the next player comes in until all batters are dismissed, with the total runs and wickets shown at the end.
 
-**### Team Match**
+**Team Match**  
 Team A and Team B each play 6 balls, scoring runs or losing wickets, and the team with the higher total at the end win.
 
 ---
 
-**Select the game mode:**"""
+Select the game mode:"""
         
         try:
             await message.reply_photo(SELECT_GAME_IMG, caption=caption, reply_markup=keyboard)
-        except:
+        except Exception as e:
+            print(f"Image error: {e}")
             await message.reply(caption, reply_markup=keyboard)
 
     # ================= MODE HANDLER =================
@@ -96,9 +97,7 @@ Team A and Team B each play 6 balls, scoring runs or losing wickets, and the tea
         
         active_votes[chat_id] = {"active": True, "count": 0, "users": [], "msg_id": None}
         
-        caption = """**# SOLO TREE COMMUNITY**
-
-**🗳️ VOTING REQUIRED!**
+        caption = """**# VOTING REQUIRED!**
 
 You are not an admin. At least 3 members must vote to start the game.
 
@@ -106,11 +105,18 @@ Click 'Vote to Start' to participate.
 
 Current votes: 0/3"""
         
-        msg = await message.reply_photo(
-            VOTE_IMG, 
-            caption=caption,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]])
-        )
+        try:
+            msg = await message.reply_photo(
+                VOTE_IMG, 
+                caption=caption,
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✔ Vote to Start", callback_data="vote")]])
+            )
+        except:
+            msg = await message.reply(
+                caption,
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✔ Vote to Start", callback_data="vote")]])
+            )
+        
         active_votes[chat_id]["msg_id"] = msg.id
         asyncio.create_task(auto_cancel_vote(client, chat_id))
 
@@ -130,35 +136,46 @@ Current votes: 0/3"""
         vote["users"].append(user.id)
         vote["count"] += 1
         
+        # Get voter names (works even without DP)
         voters = []
         for uid in vote["users"]:
             try:
                 u = await client.get_users(uid)
-                voters.append(f"• {u.first_name}")
+                name = u.first_name if u.first_name else f"User_{uid}"
+                voters.append(f"• {name}")
             except:
-                voters.append(f"• User {uid}")
+                voters.append(f"• User_{uid}")
+        
+        voters_text = "\n".join(voters)
         
         if vote["count"] >= 3:
+            # Voting successful - Show SELECT GAME menu
             await callback.message.delete()
             await select_game_menu(client, callback.message)
             vote["active"] = False
             await callback.answer("✅ Voting successful!")
         else:
-            caption = f"""**# SOLO TREE COMMUNITY**
+            caption = f"""**# VOTING REQUIRED!**
 
-**🗳️ VOTING IN PROGRESS!**
+You are not an admin. At least 3 members must vote to start the game.
+
+Click 'Vote to Start' to participate.
 
 Current votes: {vote['count']}/3
 
 **Voters:**
-{chr(10).join(voters)}
-
-Need {3 - vote['count']} more vote(s)!"""
+{voters_text}"""
             
-            await callback.message.edit_caption(
-                caption=caption,
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]])
-            )
+            try:
+                await callback.message.edit_caption(
+                    caption=caption,
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✔ Vote to Start", callback_data="vote")]])
+                )
+            except:
+                await callback.message.edit_text(
+                    caption,
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✔ Vote to Start", callback_data="vote")]])
+                )
             await callback.answer(f"Voted! ({vote['count']}/3)")
 
     # ================= AUTO CANCEL VOTE =================
@@ -207,6 +224,14 @@ Need {3 - vote['count']} more vote(s)!"""
     @app.on_message(filters.command("joingame") & filters.group)
     async def join_game_cmd(client, message: Message):
         chat_id = message.chat.id
+        game = games.get(chat_id)
+        
+        if not game:
+            return await message.reply("❌ No active game! Ask admin to start with /start")
+        
+        if game.get("status") != "waiting":
+            return await message.reply("❌ Game already started!")
+        
         if join_game(chat_id, message.from_user):
             game = games[chat_id]
             await message.reply(f"🎉 {message.from_user.first_name} joined! (Player {len(game['players'])})")
@@ -217,6 +242,8 @@ Need {3 - vote['count']} more vote(s)!"""
         game = games.get(chat_id)
         if game and game["status"] == "waiting" and len(game["players"]) >= 1:
             await start_match(client, chat_id)
+        elif game and len(game["players"]) < 1:
+            await client.send_message(chat_id, "❌ Not enough players to start.")
 
     # ================= START MATCH =================
     async def start_match(client, chat_id):
@@ -224,14 +251,12 @@ Need {3 - vote['count']} more vote(s)!"""
         if not game or game["status"] != "waiting":
             return
         
-        game["status"] = "playing"
-        players = game["players"]
-        
-        text = "👑 Match Started!\n\n👤 Players:\n" + "\n".join([f"{i+1}. {p['name']}" for i, p in enumerate(players)])
-        await client.send_message(chat_id, text)
-        
         start_match_game(chat_id)
         game = games[chat_id]
+        players = game["players"]
+        
+        text = "👑 **Match Started!**\n\n👤 **Players:**\n" + "\n".join([f"{i+1}. {p['name']}" for i, p in enumerate(players)])
+        await client.send_message(chat_id, text)
         
         await client.send_video(
             chat_id, BOWLING_VIDEO,
@@ -304,19 +329,28 @@ Need {3 - vote['count']} more vote(s)!"""
         game["bowling_number"] = None
         
         if result["type"] == "out":
-            await message.reply_video(OUT_VIDEO, caption=OUT_MESSAGE.format(
-                batter=batter["name"], bat=bat, bowler=game["current_bowler"]["name"], bowl=bow))
+            try:
+                await message.reply_video(OUT_VIDEO, caption=OUT_MESSAGE.format(
+                    batter=batter["name"], bat=bat, bowler=game["current_bowler"]["name"], bowl=bow))
+            except:
+                await message.reply(OUT_MESSAGE.format(
+                    batter=batter["name"], bat=bat, bowler=game["current_bowler"]["name"], bowl=bow))
         else:
-            await message.reply_video(get_run_video(result["runs"]), caption=RUN_MESSAGE.format(
-                batter=batter["name"], runs=f"{result['runs']} run{'s' if result['runs'] > 1 else ''}",
-                bat=bat, bowler=game["current_bowler"]["name"], bowl=bow))
+            try:
+                await message.reply_video(get_run_video(result["runs"]), caption=RUN_MESSAGE.format(
+                    batter=batter["name"], runs=f"{result['runs']} run{'s' if result['runs'] > 1 else ''}",
+                    bat=bat, bowler=game["current_bowler"]["name"], bowl=bow))
+            except:
+                await message.reply(RUN_MESSAGE.format(
+                    batter=batter["name"], runs=f"{result['runs']} run{'s' if result['runs'] > 1 else ''}",
+                    bat=bat, bowler=game["current_bowler"]["name"], bowl=bow))
         
         await message.reply(build_scoreboard(game["players"]))
         
         if game.get("game_over"):
             return await message.reply(f"🏆 Game Over! {game['winner']['name']} wins!")
         
-        # Rotate
+        # Rotate players
         players = game["players"]
         idx = next((i for i, p in enumerate(players) if p["id"] == batter["id"]), 0)
         nxt = idx
@@ -330,5 +364,10 @@ Need {3 - vote['count']} more vote(s)!"""
         
         await message.reply(NEXT_TURN_MESSAGE.format(
             batter=game["current_batter"]["name"], bowler=game["current_bowler"]["name"]))
-        await message.reply_video(BOWLING_VIDEO, caption=BOWLING_MESSAGE.format(bowler=game["current_bowler"]["name"]),
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎯 Bowling", callback_data="bowl")]]))
+        
+        try:
+            await message.reply_video(BOWLING_VIDEO, caption=BOWLING_MESSAGE.format(bowler=game["current_bowler"]["name"]),
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎯 Bowling", callback_data="bowl")]]))
+        except:
+            await message.reply(BOWLING_MESSAGE.format(bowler=game["current_bowler"]["name"]),
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎯 Bowling", callback_data="bowl")]]))
