@@ -3,6 +3,7 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from config import *
 from solo.game import *
 from solo.scoreboard import build_scoreboard
+import asyncio
 
 votes = {}
 
@@ -46,7 +47,6 @@ Click 'Vote to Start' to participate!
         data["users"].append(user.id)
         data["count"] += 1
 
-        # voters list
         voters = ""
         for uid in data["users"]:
             u = await client.get_users(uid)
@@ -67,20 +67,23 @@ Click 'Vote to Start' to participate!
             )
         )
 
-        # COMPLETE
+        # ===== VOTE COMPLETE =====
         if data["count"] >= 3:
+            await callback.answer("Voting completed ✅")
+
             await callback.message.edit_text(
                 "✅ Voting successful! The game will start shortly."
             )
 
-            # MODE SELECT UI
+            await asyncio.sleep(0.5)
+
             await client.send_photo(
                 chat_id,
                 SOLO_GAME_START_IMAGE,
-                caption="🥎 Choose the Bowling mode:",
+                caption="🥎 Select number of balls:",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("Solo Play - 1 Ball", callback_data="solo_1")],
-                    [InlineKeyboardButton("Solo Play - 3 Ball", callback_data="solo_3")]
+                    [InlineKeyboardButton("1 Ball", callback_data="solo_1")],
+                    [InlineKeyboardButton("3 Ball", callback_data="solo_3")]
                 ])
             )
 
@@ -89,8 +92,18 @@ Click 'Vote to Start' to participate!
     async def solo_mode(client, callback):
         chat_id = callback.message.chat.id
 
-        await callback.message.edit_caption(
-            "🎉 Game created!\n\nJoin the game using /joingame\n(2 minutes ⏰)"
+        game = games.get(chat_id)
+        if game:
+            game["mode"] = "1 Ball" if callback.data == "solo_1" else "3 Ball"
+
+        await callback.message.delete()
+
+        await client.send_message(
+            chat_id,
+            """🎉 Game created!
+
+Join the game using /joingame
+(2 minutes to join) ⏰"""
         )
 
     # ================= JOIN =================
