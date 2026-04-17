@@ -65,9 +65,7 @@ def register_handlers(app):
         ])
         
         caption = """Select the game mode:
----
-
-Select the game mode:"""
+"""
         
         try:
             await message.reply_photo(SELECT_GAME_IMG, caption=caption, reply_markup=keyboard)
