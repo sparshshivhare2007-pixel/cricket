@@ -159,13 +159,12 @@ def register_handlers(app):
         except:
             await callback.answer("Open bot in DM first ❌", show_alert=True)
 
-    # ================= BOWLING DM =================
+    # ================= BOWLING DM (FIXED) =================
     @app.on_message(filters.private & filters.text)
     async def bowling_dm(client, message: Message):
         user_id = message.from_user.id
 
         for chat_id, game in games.items():
-
             if game["status"] != "playing":
                 continue
 
@@ -188,17 +187,22 @@ def register_handlers(app):
                 BATTING_VIDEO_URL,
                 caption=(
                     f"🏏 Now Batter: {game['current_batter']['name']}\n"
-                    "🔥 Send number (1-6)"
+                    "🔥 Send number (1-6) in GROUP"
                 )
             )
 
-    # ================= BATTING (FINAL FIXED) =================
+    # ================= BATTING (FIXED) =================
     @app.on_message(filters.group & filters.text & ~filters.bot)
     async def batting(client, message: Message):
         chat_id = message.chat.id
         game = games.get(chat_id)
 
         if not game or game["status"] != "playing":
+            return
+
+        # Check if bowling number is set
+        if game.get("bowling_number") is None:
+            await message.reply("⏳ Waiting for bowler to bowl first!")
             return
 
         batter = game.get("current_batter")
@@ -216,6 +220,9 @@ def register_handlers(app):
         result = play_ball(chat_id, bat)
         bow = game["bowling_number"]
 
+        # Clear bowling number after play
+        game["bowling_number"] = None
+
         # ================= OUT =================
         if result["type"] == "out":
             await message.reply_video(
@@ -227,6 +234,11 @@ def register_handlers(app):
                     bowl=bow
                 )
             )
+            
+            # Check if game is over
+            if game.get("game_over"):
+                await message.reply(f"🏆 Game Over! {game['winner']['name']} wins!")
+                return
 
         # ================= RUN =================
         else:
@@ -244,6 +256,11 @@ def register_handlers(app):
 
         await message.reply(build_scoreboard(game["players"]))
 
+        # Check again if game is over after updating score
+        if game.get("game_over"):
+            await message.reply(f"🏆 Game Over! {game['winner']['name']} wins!")
+            return
+
         # ================= SAFE ROTATION =================
         players = game["players"]
 
@@ -252,7 +269,6 @@ def register_handlers(app):
 
         game["current_batter"] = players[nxt]
         game["current_bowler"] = players[cur]
-        game["bowling_number"] = None
 
         await message.reply(
             NEXT_TURN_MESSAGE.format(
