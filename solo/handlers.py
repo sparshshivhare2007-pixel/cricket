@@ -1,4 +1,4 @@
-# handlers.py - 2 Minutes Auto Start, Unlimited Players
+# handlers.py - Fixed (No auto-start on 4 players, only timer)
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -127,7 +127,7 @@ Solo Play - 3 Ball"""
         
         asyncio.create_task(start_join_timer(client, chat_id))
 
-    # ================= JOIN TIMER (2 MINUTES AUTO START) =================
+    # ================= JOIN TIMER (ONLY TIMER, NO AUTO-START ON 4 PLAYERS) =================
     async def start_join_timer(client, chat_id):
         # 2 minutes = 120 seconds
         # Warning at 1 minute (60 seconds)
@@ -157,7 +157,7 @@ Solo Play - 3 Ball"""
         # Final 10 seconds wait
         await asyncio.sleep(10)
         
-        # AUTO START - Time's up
+        # AUTO START - Time's up (2 minutes complete)
         game = games.get(chat_id)
         if game and game["status"] == "waiting":
             players_count = len(game.get("players", []))
@@ -283,6 +283,9 @@ Voters:
             game = games[chat_id]
             players_count = len(game["players"])
             await message.reply(f"{message.from_user.first_name}, you've joined the game! (Player {players_count})")
+            
+            # REMOVED: Auto-start on 4 players
+            # Game will ONLY start after 2 minutes timer
 
     # ================= START GAME MATCH =================
     async def start_game_match(client, chat_id):
