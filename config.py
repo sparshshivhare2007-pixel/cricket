@@ -28,6 +28,7 @@ IMAGE_URL = "https://files.catbox.moe/0odkk1.jpg"
 HOST_IMAGE_URL = "https://files.catbox.moe/0odkk1.jpg"
 GAME_INSTRUCTIONS_IMAGE_URL = "https://files.catbox.moe/iq4758.jpg"
 RESULT_IMAGE_URL = "https://graph.org/file/17971526dfefa9e20863b-44207fd3a022c59c53.jpg"
+SOLO_GAME_START_IMAGE = "https://files.catbox.moe/0odkk1.jpg"
 
 # ========== SOLO MODE MEDIA ==========
 BOWLING_VIDEO_URL = "https://files.catbox.moe/r75e19.mp4"
