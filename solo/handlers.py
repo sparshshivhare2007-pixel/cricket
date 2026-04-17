@@ -101,7 +101,6 @@ Click 'Vote to Start' to participate!
             )
         )
 
-        # ================= START GAME =================
         if data["count"] >= 3:
             await callback.message.edit_text(
                 "✅ Voting successful! The game will start shortly."
@@ -184,10 +183,12 @@ Click 'Vote to Start' to participate!
             if game["current_bowler"]["id"] != user_id:
                 continue
 
-            if not message.text.isdigit():
+            text = message.text.strip()
+
+            if not text.isdigit():
                 return await message.reply(INVALID_NUMBER)
 
-            num = int(message.text)
+            num = int(text)
             if num < 1 or num > 6:
                 return await message.reply(INVALID_NUMBER)
 
@@ -202,7 +203,7 @@ Click 'Vote to Start' to participate!
                 )
             )
 
-    # ================= BATTING =================
+    # ================= BATTING (FIXED - MAIN ISSUE SOLVED) =================
     @app.on_message(filters.group & filters.text)
     async def batting(client, message: Message):
         chat_id = message.chat.id
@@ -214,10 +215,13 @@ Click 'Vote to Start' to participate!
         if message.from_user.id != game["current_batter"]["id"]:
             return
 
-        if not message.text.isdigit():
+        text = message.text.strip()
+
+        if not text.isdigit():
             return await message.reply(INVALID_NUMBER)
 
-        bat = int(message.text)
+        bat = int(text)
+
         if bat < 1 or bat > 6:
             return await message.reply(INVALID_NUMBER)
 
@@ -252,9 +256,14 @@ Click 'Vote to Start' to participate!
 
         await message.reply(build_scoreboard(game["players"]))
 
-        # ================= ROTATION =================
+        # ================= SAFE ROTATION =================
         players = game["players"]
-        cur = players.index(game["current_batter"])
+
+        try:
+            cur = players.index(game["current_batter"])
+        except ValueError:
+            cur = 0
+
         nxt = (cur + 1) % len(players)
 
         game["current_batter"] = players[nxt]
