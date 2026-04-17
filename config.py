@@ -1,4 +1,4 @@
-# config.py - Final Complete Version
+# config.py - Final Complete Fixed Version
 
 import os
 from dotenv import load_dotenv
@@ -31,16 +31,16 @@ VIDEOS_PATH = os.path.join(ASSETS_PATH, "videos")
 IMAGES_PATH = os.path.join(ASSETS_PATH, "images")
 
 # ========== GAME IMAGES (Local) ==========
-SELECT_GAME_IMAGE = os.path.join(IMAGES_PATH, "select_game.jpg")  # SELECT GAME wali image (admin ke liye)
-VOTE_IMAGE = os.path.join(IMAGES_PATH, "vote.jpg")  # VOTE wali image (member ke liye)
-SOLO_PLAY_IMAGE = os.path.join(IMAGES_PATH, "solo_play.jpg")  # SOLO PLAY MATCH wali image
+SELECT_GAME_IMAGE = os.path.join(IMAGES_PATH, "select_game.jpg")
+VOTE_IMAGE = os.path.join(IMAGES_PATH, "vote.jpg")
+SOLO_PLAY_IMAGE = os.path.join(IMAGES_PATH, "solo_play.jpg")
 SOLO_GAME_START_IMAGE = os.path.join(IMAGES_PATH, "game_start.jpg")
 
 # Fallback URLs for images
 SELECT_GAME_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 VOTE_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
+SOLO_PLAY_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 SOLO_GAME_START_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
-SOLO_PLAY_IMG = get_image(SOLO_PLAY_IMAGE, SOLO_PLAY_IMAGE_FALLBACK)
 
 # ========== SOLO MODE VIDEOS (Local) ==========
 BOWLING_VIDEO_PATH = os.path.join(VIDEOS_PATH, "bowling.mp4")
@@ -64,26 +64,28 @@ FOUR_VIDEO_URL = "https://graph.org/file/f122a1d001bee672c3717-a8acfd94740ab619f
 RUN_5_VIDEO_URL = "https://graph.org/file/4bbb87b5d33ac6bed64e5-841214f4c3d85a6dd1.mp4"
 SIX_VIDEO_URL = "https://graph.org/file/5652ee0d8c02e04118b9e-ec070692c1c407ce98.mp4"
 
-# Function to get image file (local or URL)
+# ========== HELPER FUNCTIONS ==========
 def get_image_file(local_path, fallback_url):
+    """Return local file path if exists, else return fallback URL"""
     if os.path.exists(local_path):
         return local_path
     print(f"⚠️ Local image not found: {local_path}, using URL fallback")
     return fallback_url
 
-# Function to get video file (local or URL)
 def get_video_file(video_path, video_url):
+    """Return local file path if exists, else return fallback URL"""
     if os.path.exists(video_path):
         return video_path
     print(f"⚠️ Local video not found: {video_path}, using URL fallback")
     return video_url
 
-# Pre-define images
+# ========== PRE-DEFINE IMAGES ==========
 SELECT_GAME_IMG = get_image_file(SELECT_GAME_IMAGE, SELECT_GAME_IMAGE_FALLBACK)
 VOTE_IMG = get_image_file(VOTE_IMAGE, VOTE_IMAGE_FALLBACK)
+SOLO_PLAY_IMG = get_image_file(SOLO_PLAY_IMAGE, SOLO_PLAY_IMAGE_FALLBACK)
 SOLO_START_IMAGE = get_image_file(SOLO_GAME_START_IMAGE, SOLO_GAME_START_IMAGE_FALLBACK)
 
-# Pre-define videos
+# ========== PRE-DEFINE VIDEOS ==========
 BOWLING_VIDEO = get_video_file(BOWLING_VIDEO_PATH, BOWLING_VIDEO_URL)
 BATTING_VIDEO = get_video_file(BATTING_VIDEO_PATH, BATTING_VIDEO_URL)
 OUT_VIDEO = get_video_file(OUT_VIDEO_PATH, OUT_VIDEO_URL)
@@ -94,7 +96,15 @@ RUN_4_VIDEO = get_video_file(RUN_4_VIDEO_PATH, FOUR_VIDEO_URL)
 RUN_5_VIDEO = get_video_file(RUN_5_VIDEO_PATH, RUN_5_VIDEO_URL)
 RUN_6_VIDEO = get_video_file(RUN_6_VIDEO_PATH, SIX_VIDEO_URL)
 
-RUN_VIDEOS = {1: RUN_1_VIDEO, 2: RUN_2_VIDEO, 3: RUN_3_VIDEO, 4: RUN_4_VIDEO, 5: RUN_5_VIDEO, 6: RUN_6_VIDEO}
+# ========== RUN VIDEOS DICTIONARY ==========
+RUN_VIDEOS = {
+    1: RUN_1_VIDEO,
+    2: RUN_2_VIDEO,
+    3: RUN_3_VIDEO,
+    4: RUN_4_VIDEO,
+    5: RUN_5_VIDEO,
+    6: RUN_6_VIDEO
+}
 
 # ========== TIMERS ==========
 BOWLING_TIMER_SECONDS = 60
