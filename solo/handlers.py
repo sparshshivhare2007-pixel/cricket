@@ -1,4 +1,4 @@
-# handlers.py - Scoreboard only on events, Final Result at end
+# handlers.py - Fixed batting part (scoreboard only on OUT or BOWLER CHANGE)
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -367,7 +367,7 @@ Voters:
             await message.reply("Bowling number sent!")
             break
 
-    # ================= BATTING =================
+    # ================= BATTING (Scoreboard only on OUT or BOWLER CHANGE) =================
     @app.on_message(filters.group & filters.text & ~filters.bot)
     async def batting_msg(client, message):
         chat_id = message.chat.id
@@ -392,6 +392,8 @@ Voters:
         game["bowling_number"] = None
         
         bowler = game["current_bowler"]
+        ball_mode = game.get("ball_mode", 3)
+        bowler_completed = game["current_bowler_balls"] >= ball_mode
         
         # SEND RESULT VIDEO/MESSAGE
         if result["type"] == "out":
@@ -402,23 +404,19 @@ Voters:
                 await message.reply(OUT_MESSAGE.format(
                     batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
             
-            # SEND SCOREBOARD AFTER OUT
-            await message.reply(build_scoreboard(game["players"]))
+            # SEND SCOREBOARD AFTER OUT (ONLY HERE)
+            await message.reply(build_scoreboard(game["players"], is_final=False))
             
             # CHECK GAME OVER
             if game.get("game_over"):
-                # SEND FINAL RESULT
-                winner = game["winner"]
-                final_text = f"🏆 GAME OVER! 🏆\n\nWinner: {winner['name']}\nScore: {winner['score']} runs\n\n"
-                final_text += build_scoreboard(game["players"])
+                final_text = build_scoreboard(game["players"], is_final=True)
                 await message.reply(final_text)
                 return
             
-            # NEW BATTER - Clickable mention
+            # NEW BATTER
             new_batter = game["current_batter"]
             await message.reply(f"New batter: [{new_batter['name']}](tg://user?id={new_batter['id']})", disable_web_page_preview=True)
             
-            # Check if bowler changed after out
             new_bowler = game["current_bowler"]
             
             # Send bowling video for next ball
@@ -440,12 +438,11 @@ Voters:
                     batter=batter["name"], runs=f"{result['runs']} run{'s' if result['runs'] > 1 else ''}",
                     bat=bat, bowler=bowler["name"], bowl=bow))
             
-            # SEND SCOREBOARD AFTER RUN
-            await message.reply(build_scoreboard(game["players"]))
-            
-            # Check if bowler completed his overs (3 balls)
-            ball_mode = game.get("ball_mode", 3)
-            if game["current_bowler_balls"] >= ball_mode:
+            # CHECK IF BOWLER COMPLETED (ONLY THEN SEND SCOREBOARD)
+            if bowler_completed:
+                # SEND SCOREBOARD AFTER BOWLER CHANGE
+                await message.reply(build_scoreboard(game["players"], is_final=False))
+                
                 # Bowler changed
                 new_bowler = game["current_bowler"]
                 await message.reply(f"Bowler changed! Now bowling: [{new_bowler['name']}](tg://user?id={new_bowler['id']})", disable_web_page_preview=True)
@@ -458,7 +455,7 @@ Voters:
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Bowling", callback_data="bowl")]])
                 )
             else:
-                # Same bowler continues - send batting video for next ball
+                # Same bowler continues - send batting video for next ball (NO SCOREBOARD)
                 await message.reply_video(
                     BATTING_VIDEO,
                     caption=f"Hey [{batter['name']}](tg://user?id={batter['id']}), now you're batting! Send number (1-6) in GROUP"
