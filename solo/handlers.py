@@ -24,7 +24,6 @@ async def auto_start_game(client, chat_id):
 
     # FINAL PLAYER LIST
     text = "👑 Unknown Host\n\n👤 Solo Players\n\n"
-
     for i, p in enumerate(players, 1):
         name = f"@{p['username']}" if p.get("username") else p["name"]
         text += f"{i}. {name}\n"
@@ -37,11 +36,6 @@ async def auto_start_game(client, chat_id):
 
     await client.send_message(chat_id, "🚀 Game starting...")
 
-    await client.send_message(
-        chat_id,
-        f"Hey {game['current_bowler']['name']}, now you're bowling!"
-    )
-
     await client.send_video(
         chat_id,
         BOWLING_VIDEO_URL,
@@ -49,11 +43,11 @@ async def auto_start_game(client, chat_id):
             bowler=game["current_bowler"]["name"]
         ),
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Bowling", url=f"https://t.me/{client.me.username}")]]
+            [[InlineKeyboardButton("Bowling", callback_data="start_bowling")]]
         )
     )
 
-
+# ================= REGISTER =================
 def register_handlers(app):
 
     # ================= START =================
@@ -112,8 +106,6 @@ Click 'Vote to Start' to participate!
         )
 
         if data["count"] >= 3:
-            await callback.answer("Voting completed ✅")
-
             await callback.message.edit_text(
                 "✅ Voting successful! The game will start shortly."
             )
@@ -149,7 +141,6 @@ Join the game using /joingame
 (2 minutes to join) ⏰"""
         )
 
-        # 🔥 START AUTO TIMER
         asyncio.create_task(auto_start_game(client, chat_id))
 
     # ================= JOIN =================
@@ -164,6 +155,57 @@ Join the game using /joingame
             await message.reply(
                 f"🎉 {message.from_user.first_name}, you've joined the game! (Player {player_no}) 👍"
             )
+
+    # ================= BOWLING BUTTON =================
+    @app.on_callback_query(filters.regex("start_bowling"))
+    async def start_bowling_callback(client, callback):
+        user = callback.from_user
+        chat_id = callback.message.chat.id
+
+        game = games.get(chat_id)
+
+        if game["current_bowler"]["id"] != user.id:
+            return await callback.answer("Not your turn ❌", show_alert=True)
+
+        try:
+            await client.send_video(
+                user.id,
+                BOWLING_VIDEO_URL,
+                caption=f"""🎯 You are bowling now!
+
+Send number (1-6)
+⏰ Time: 60 sec"""
+            )
+            await callback.answer("Check DM ✅", show_alert=True)
+        except:
+            await callback.answer("Start bot in DM first ❌", show_alert=True)
+
+    # ================= BOWLING DM =================
+    @app.on_message(filters.private & filters.text)
+    async def bowling_dm(client, message: Message):
+        user_id = message.from_user.id
+
+        for chat_id, game in games.items():
+            if game["status"] != "playing":
+                continue
+
+            if game["current_bowler"]["id"] == user_id:
+
+                if not message.text.isdigit():
+                    return await message.reply(INVALID_NUMBER)
+
+                num = int(message.text)
+                if num < 1 or num > 6:
+                    return await message.reply(INVALID_NUMBER)
+
+                set_bowling(chat_id, num)
+
+                await client.send_message(
+                    chat_id,
+                    f"Current batter: {game['current_batter']['name']}\n\nSend Your number:"
+                )
+
+                await client.send_video(chat_id, BATTING_VIDEO_URL)
 
     # ================= BATTING =================
     @app.on_message(filters.group & filters.text)
@@ -187,31 +229,54 @@ Join the game using /joingame
         result = play_ball(chat_id, bat)
 
         bow = game["bowling_number"]
-        batter = game["current_batter"]["name"]
-        bowler = game["current_bowler"]["name"]
 
         if result["type"] == "out":
             await message.reply_video(
                 OUT_VIDEO_URL,
                 caption=OUT_MESSAGE.format(
-                    batter=batter,
+                    batter=game["current_batter"]["name"],
                     bat=bat,
-                    bowler=bowler,
+                    bowler=game["current_bowler"]["name"],
                     bowl=bow
                 )
             )
         else:
-            runs = result["runs"]
-
-            caption = RUN_MESSAGE.format(
-                batter=batter,
-                runs=runs,
-                bat=bat,
-                bowler=bowler,
-                bowl=bow
+            await message.reply(
+                RUN_MESSAGE.format(
+                    batter=game["current_batter"]["name"],
+                    runs=result["runs"],
+                    bat=bat,
+                    bowler=game["current_bowler"]["name"],
+                    bowl=bow
+                )
             )
 
-            await message.reply(caption)
-
+        # SCOREBOARD
         scoreboard = build_scoreboard(game["players"])
         await message.reply(scoreboard)
+
+        # ROTATION
+        players = game["players"]
+        current_index = players.index(game["current_batter"])
+        next_index = (current_index + 1) % len(players)
+
+        game["current_batter"] = players[next_index]
+        game["current_bowler"] = players[current_index]
+        game["bowling_number"] = None
+
+        await message.reply(
+            NEXT_TURN_MESSAGE.format(
+                batter=game["current_batter"]["name"],
+                bowler=game["current_bowler"]["name"]
+            )
+        )
+
+        await message.reply_video(
+            BOWLING_VIDEO_URL,
+            caption=BOWLING_MESSAGE.format(
+                bowler=game["current_bowler"]["name"]
+            ),
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("Bowling", callback_data="start_bowling")]]
+            )
+        )
