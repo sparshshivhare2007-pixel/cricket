@@ -64,16 +64,7 @@ def register_handlers(app):
             [InlineKeyboardButton("❌ Cancel", callback_data="mode_cancel")]
         ])
         
-        caption = """**# SOLO TREE COMMUNITY**
-
-**# SELECT GAME**
-
-**Solo mode**  
-Each bowler bowls 3 balls, the batsman scores runs or gets out, and if out, the next player comes in until all batters are dismissed, with the total runs and wickets shown at the end.
-
-**Team Match**  
-Team A and Team B each play 6 balls, scoring runs or losing wickets, and the team with the higher total at the end win.
-
+        caption = """Select the game mode:
 ---
 
 Select the game mode:"""
