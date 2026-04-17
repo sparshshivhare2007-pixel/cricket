@@ -1,4 +1,4 @@
-# config.py - Final Complete Fixed Version
+# config.py - Final Complete Version
 
 import os
 from dotenv import load_dotenv
@@ -30,19 +30,21 @@ ASSETS_PATH = "assets"
 VIDEOS_PATH = os.path.join(ASSETS_PATH, "videos")
 IMAGES_PATH = os.path.join(ASSETS_PATH, "images")
 
-# ========== GAME IMAGES (Local) ==========
+# ========== GAME IMAGES ==========
 SELECT_GAME_IMAGE = os.path.join(IMAGES_PATH, "select_game.jpg")
 VOTE_IMAGE = os.path.join(IMAGES_PATH, "vote.jpg")
 SOLO_PLAY_IMAGE = os.path.join(IMAGES_PATH, "solo_play.jpg")
+HOST_IMAGE_URL = os.path.join(IMAGES_PATH, "host_image.jpg")  # SOLO TREE COMMUNITY wali image
 SOLO_GAME_START_IMAGE = os.path.join(IMAGES_PATH, "game_start.jpg")
 
 # Fallback URLs for images
 SELECT_GAME_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 VOTE_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 SOLO_PLAY_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
+HOST_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 SOLO_GAME_START_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 
-# ========== SOLO MODE VIDEOS (Local) ==========
+# ========== SOLO MODE VIDEOS ==========
 BOWLING_VIDEO_PATH = os.path.join(VIDEOS_PATH, "bowling.mp4")
 BATTING_VIDEO_PATH = os.path.join(VIDEOS_PATH, "batting.mp4")
 OUT_VIDEO_PATH = os.path.join(VIDEOS_PATH, "out.mp4")
@@ -83,6 +85,7 @@ def get_video_file(video_path, video_url):
 SELECT_GAME_IMG = get_image_file(SELECT_GAME_IMAGE, SELECT_GAME_IMAGE_FALLBACK)
 VOTE_IMG = get_image_file(VOTE_IMAGE, VOTE_IMAGE_FALLBACK)
 SOLO_PLAY_IMG = get_image_file(SOLO_PLAY_IMAGE, SOLO_PLAY_IMAGE_FALLBACK)
+HOST_IMAGE_URL = get_image_file(HOST_IMAGE_URL, HOST_IMAGE_FALLBACK)
 SOLO_START_IMAGE = get_image_file(SOLO_GAME_START_IMAGE, SOLO_GAME_START_IMAGE_FALLBACK)
 
 # ========== PRE-DEFINE VIDEOS ==========
