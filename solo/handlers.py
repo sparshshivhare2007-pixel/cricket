@@ -1,3 +1,5 @@
+# handlers.py - Complete updated version
+
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from config import *
@@ -7,44 +9,18 @@ import asyncio
 
 votes = {}
 
-# ================= AUTO START =================
-async def auto_start_game(client, chat_id):
-    await asyncio.sleep(JOINING_TIMER_SECONDS)
-
-    game = games.get(chat_id)
-    if not game or game["status"] != "waiting":
-        return
-
-    players = game["players"]
-
-    if len(players) < 1:
-        await client.send_message(chat_id, "❌ Not enough players to start.")
-        return
-
-    text = "👑 Unknown Host\n\n👤 Solo Players\n\n"
-
-    for i, p in enumerate(players, 1):
-        name = f"@{p.get('username')}" if p.get("username") else p["name"]
-        text += f"{i}. {name}\n"
-
-    await client.send_message(chat_id, text)
-
-    start_match(chat_id)
-    game = games[chat_id]
-
-    await client.send_message(chat_id, "🚀 Game starting...")
-
-    await client.send_video(
-        chat_id,
-        BOWLING_VIDEO_URL,
-        caption=BOWLING_MESSAGE.format(
-            bowler=game["current_bowler"]["name"]
-        ),
-        reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Bowling", callback_data="start_bowling")]]
-        )
-    )
-
+# Run video mapping function
+def get_run_video(runs):
+    """Return video URL based on runs scored"""
+    run_videos = {
+        1: RUN_1_VIDEO_URL,
+        2: RUN_2_VIDEO_URL,
+        3: RUN_3_VIDEO_URL,
+        4: FOUR_VIDEO_URL,
+        5: RUN_5_VIDEO_URL,
+        6: SIX_VIDEO_URL
+    }
+    return run_videos.get(runs, RUN_1_VIDEO_URL)
 
 def register_handlers(app):
 
@@ -136,6 +112,44 @@ def register_handlers(app):
                 f"🎉 {message.from_user.first_name} joined! (Player {len(game['players'])})"
             )
 
+    # ================= AUTO START =================
+    async def auto_start_game(client, chat_id):
+        await asyncio.sleep(JOINING_TIMER_SECONDS)
+
+        game = games.get(chat_id)
+        if not game or game["status"] != "waiting":
+            return
+
+        players = game["players"]
+
+        if len(players) < 1:
+            await client.send_message(chat_id, "❌ Not enough players to start.")
+            return
+
+        text = "👑 Unknown Host\n\n👤 Solo Players\n\n"
+
+        for i, p in enumerate(players, 1):
+            name = f"@{p.get('username')}" if p.get("username") else p["name"]
+            text += f"{i}. {name}\n"
+
+        await client.send_message(chat_id, text)
+
+        start_match(chat_id)
+        game = games[chat_id]
+
+        await client.send_message(chat_id, "🚀 Game starting...")
+
+        await client.send_video(
+            chat_id,
+            BOWLING_VIDEO_URL,
+            caption=BOWLING_MESSAGE.format(
+                bowler=game["current_bowler"]["name"]
+            ),
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("Bowling", callback_data="start_bowling")]]
+            )
+        )
+
     # ================= BOWLING BUTTON =================
     @app.on_callback_query(filters.regex("^start_bowling$"))
     async def start_bowling(client, callback):
@@ -159,7 +173,7 @@ def register_handlers(app):
         except:
             await callback.answer("Open bot in DM first ❌", show_alert=True)
 
-    # ================= BOWLING DM (FIXED) =================
+    # ================= BOWLING DM =================
     @app.on_message(filters.private & filters.text)
     async def bowling_dm(client, message: Message):
         user_id = message.from_user.id
@@ -190,8 +204,10 @@ def register_handlers(app):
                     "🔥 Send number (1-6) in GROUP"
                 )
             )
+            
+            await message.reply("✅ Bowling number sent to game!")
 
-    # ================= BATTING (FIXED) =================
+    # ================= BATTING WITH RUN VIDEOS =================
     @app.on_message(filters.group & filters.text & ~filters.bot)
     async def batting(client, message: Message):
         chat_id = message.chat.id
@@ -237,15 +253,23 @@ def register_handlers(app):
             
             # Check if game is over
             if game.get("game_over"):
-                await message.reply(f"🏆 Game Over! {game['winner']['name']} wins!")
+                await message.reply(
+                    f"🏆 Game Over! {game['winner']['name']} wins with {game['winner']['score']} runs!"
+                )
                 return
 
-        # ================= RUN =================
-        else:
-            runs_text = f"{result['runs']} run{'s' if result['runs'] > 1 else ''}"
-
-            await message.reply(
-                RUN_MESSAGE.format(
+        # ================= RUN WITH VIDEO =================
+        elif result["type"] == "run":
+            runs = result['runs']
+            runs_text = f"{runs} run{'s' if runs > 1 else ''}"
+            
+            # Get the appropriate run video
+            run_video_url = get_run_video(runs)
+            
+            # Send run video
+            await message.reply_video(
+                run_video_url,
+                caption=RUN_MESSAGE.format(
                     batter=batter["name"],
                     runs=runs_text,
                     bat=bat,
@@ -254,35 +278,55 @@ def register_handlers(app):
                 )
             )
 
+        # Send scoreboard
         await message.reply(build_scoreboard(game["players"]))
 
         # Check again if game is over after updating score
         if game.get("game_over"):
-            await message.reply(f"🏆 Game Over! {game['winner']['name']} wins!")
+            await message.reply(
+                f"🏆 Game Over! {game['winner']['name']} wins with {game['winner']['score']} runs!"
+            )
             return
 
-        # ================= SAFE ROTATION =================
+        # ================= ROTATE PLAYERS =================
         players = game["players"]
+        
+        # Find current batter index
+        cur_index = None
+        for i, player in enumerate(players):
+            if player["id"] == batter["id"]:
+                cur_index = i
+                break
+        
+        if cur_index is not None:
+            # Find next batter who is not out
+            next_index = cur_index
+            for _ in range(len(players)):
+                next_index = (next_index + 1) % len(players)
+                if not players[next_index].get("out", False):
+                    break
+            
+            # Update current batter and bowler
+            game["current_batter"] = players[next_index].copy()
+            
+            # Set bowler to previous batter or next player
+            bowler_index = (next_index + 1) % len(players)
+            game["current_bowler"] = players[bowler_index].copy()
 
-        cur = next((i for i, p in enumerate(players) if p["id"] == batter["id"]), 0)
-        nxt = (cur + 1) % len(players)
-
-        game["current_batter"] = players[nxt]
-        game["current_bowler"] = players[cur]
-
-        await message.reply(
-            NEXT_TURN_MESSAGE.format(
-                batter=game["current_batter"]["name"],
-                bowler=game["current_bowler"]["name"]
+            await message.reply(
+                NEXT_TURN_MESSAGE.format(
+                    batter=game["current_batter"]["name"],
+                    bowler=game["current_bowler"]["name"]
+                )
             )
-        )
 
-        await message.reply_video(
-            BOWLING_VIDEO_URL,
-            caption=BOWLING_MESSAGE.format(
-                bowler=game["current_bowler"]["name"]
-            ),
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Bowling", callback_data="start_bowling")]]
+            # Ask next bowler to bowl
+            await message.reply_video(
+                BOWLING_VIDEO_URL,
+                caption=BOWLING_MESSAGE.format(
+                    bowler=game["current_bowler"]["name"]
+                ),
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("Bowling", callback_data="start_bowling")]]
+                )
             )
-        )
