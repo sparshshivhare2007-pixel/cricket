@@ -1,4 +1,4 @@
-# handlers.py - Fixed (No Next Turn message)
+# handlers.py - Scoreboard only on events, Final Result at end
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -393,6 +393,7 @@ Voters:
         
         bowler = game["current_bowler"]
         
+        # SEND RESULT VIDEO/MESSAGE
         if result["type"] == "out":
             try:
                 await message.reply_video(OUT_VIDEO, caption=OUT_MESSAGE.format(
@@ -401,8 +402,17 @@ Voters:
                 await message.reply(OUT_MESSAGE.format(
                     batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
             
+            # SEND SCOREBOARD AFTER OUT
+            await message.reply(build_scoreboard(game["players"]))
+            
+            # CHECK GAME OVER
             if game.get("game_over"):
-                return await message.reply(f"Game Over! {game['winner']['name']} wins!")
+                # SEND FINAL RESULT
+                winner = game["winner"]
+                final_text = f"🏆 GAME OVER! 🏆\n\nWinner: {winner['name']}\nScore: {winner['score']} runs\n\n"
+                final_text += build_scoreboard(game["players"])
+                await message.reply(final_text)
+                return
             
             # NEW BATTER - Clickable mention
             new_batter = game["current_batter"]
@@ -430,6 +440,9 @@ Voters:
                     batter=batter["name"], runs=f"{result['runs']} run{'s' if result['runs'] > 1 else ''}",
                     bat=bat, bowler=bowler["name"], bowl=bow))
             
+            # SEND SCOREBOARD AFTER RUN
+            await message.reply(build_scoreboard(game["players"]))
+            
             # Check if bowler completed his overs (3 balls)
             ball_mode = game.get("ball_mode", 3)
             if game["current_bowler_balls"] >= ball_mode:
@@ -450,9 +463,3 @@ Voters:
                     BATTING_VIDEO,
                     caption=f"Hey [{batter['name']}](tg://user?id={batter['id']}), now you're batting! Send number (1-6) in GROUP"
                 )
-        
-        # Send scoreboard after each ball
-        await message.reply(build_scoreboard(game["players"]))
-        
-        if game.get("game_over"):
-            return await message.reply(f"Game Over! {game['winner']['name']} wins!")
