@@ -1,8 +1,8 @@
-# handlers.py - Fixed Admin Detection
+# handlers.py - Final Complete with Ball Selection
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from pyrogram.enums import ChatMemberStatus  # ADD THIS IMPORT
+from pyrogram.enums import ChatMemberStatus
 from config import *
 from solo.game import *
 from solo.scoreboard import build_scoreboard
@@ -15,24 +15,10 @@ def get_run_video(runs):
     return run_videos.get(runs, RUN_1_VIDEO)
 
 async def is_admin(client, chat_id, user_id):
-    """Check if user is admin - FIXED with proper enum comparison"""
     try:
         member = await client.get_chat_member(chat_id, user_id)
-        
-        # Print for debugging
-        print(f"🔍 User ID: {user_id}")
-        print(f"🔍 Status: {member.status}")
-        print(f"🔍 Status type: {type(member.status)}")
-        
-        # FIXED: Compare with ChatMemberStatus enum
-        if member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
-            print(f"✅ Is Admin: True")
-            return True
-        
-        print(f"❌ Is Admin: False")
-        return False
-    except Exception as e:
-        print(f"❌ Error checking admin: {e}")
+        return member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]
+    except:
         return False
 
 def register_handlers(app):
@@ -43,34 +29,31 @@ def register_handlers(app):
         chat_id = message.chat.id
         user_id = message.from_user.id
         
-        print(f"📱 /start command from user: {user_id}")
-        print(f"📱 Chat ID: {chat_id}")
-        
-        admin_status = await is_admin(client, chat_id, user_id)
-        
-        if admin_status:
-            print("✅ ADMIN - Showing SELECT GAME menu")
+        if await is_admin(client, chat_id, user_id):
             await select_game_menu(client, message)
         else:
-            print("❌ MEMBER - Showing VOTE system")
             await vote_system(client, message)
 
-    # ================= SELECT GAME MENU (ADMIN) =================
+    # ================= SELECT GAME MENU =================
     async def select_game_menu(client, message):
-        print("🎮 Opening SELECT GAME menu")
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🎯 Solo", callback_data="mode_solo"), InlineKeyboardButton("👥 Team", callback_data="mode_team")],
-            [InlineKeyboardButton("💰 Start Auction", callback_data="mode_auction"), InlineKeyboardButton("🏆 Tournament Mode", callback_data="mode_tournament")],
+            [InlineKeyboardButton("💰 Start Auction", callback_data="mode_auction"), InlineKeyboardButton("🏆 Tournament", callback_data="mode_tournament")],
             [InlineKeyboardButton("❌ Cancel", callback_data="mode_cancel")]
         ])
         
-        caption = """Select the game mode:
-"""
+        caption = """**SOLO TREE COMMUNITY**
+
+**SELECT GAME**
+
+🎯 Solo Mode
+👥 Team Match
+
+Select game mode:"""
         
         try:
             await message.reply_photo(SELECT_GAME_IMG, caption=caption, reply_markup=keyboard)
-        except Exception as e:
-            print(f"Image error: {e}")
+        except:
             await message.reply(caption, reply_markup=keyboard)
 
     # ================= MODE HANDLER =================
@@ -88,33 +71,76 @@ def register_handlers(app):
             return
         
         if action == "solo":
-            await callback.message.delete()
-            create_game(callback.message.chat.id)
-            await callback.message.reply(
-                "🎉 Game created!\n\nJoin using /joingame\n⏰ 2 minutes left",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")],
-                    [InlineKeyboardButton("🚀 Force Start", callback_data="force_start")]
-                ])
-            )
-            asyncio.create_task(auto_start(client, callback.message.chat.id))
+            await ball_selection_menu(client, callback)
 
-    # ================= VOTE SYSTEM (MEMBER) =================
+    # ================= BALL SELECTION MENU =================
+    async def ball_selection_menu(client, callback):
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("⚾ Solo Play - 1 Ball", callback_data="ball_1")],
+            [InlineKeyboardButton("🏏 Solo Play - 3 Ball", callback_data="ball_3")],
+            [InlineKeyboardButton("🔙 Back", callback_data="ball_back")]
+        ])
+        
+        caption = """**SOLO TREE COMMUNITY**
+
+**SOLO PLAY MATCH**
+
+**Choose the Bowling mode:**
+
+⚾ Solo Play - 1 Ball
+🏏 Solo Play - 3 Ball"""
+        
+        await callback.message.edit_caption(
+            caption=caption,
+            reply_markup=keyboard
+        )
+        await callback.answer()
+
+    # ================= BALL SELECTION HANDLER =================
+    @app.on_callback_query(filters.regex("^ball_"))
+    async def ball_handler(client, callback: CallbackQuery):
+        action = callback.data.split("_")[1]
+        
+        if action == "back":
+            await callback.message.delete()
+            await select_game_menu(client, callback.message)
+            return
+        
+        ball_mode = int(action)
+        chat_id = callback.message.chat.id
+        
+        create_game(chat_id)
+        game = games[chat_id]
+        game["ball_mode"] = ball_mode
+        game["mode"] = f"solo_{ball_mode}"
+        
+        await callback.message.delete()
+        
+        await client.send_message(
+            chat_id,
+            f"🎉 **Solo Mode Activated!** ({ball_mode} Ball{'s' if ball_mode > 1 else ''})\n\n"
+            "📝 Send `/joingame` to join\n"
+            f"⏰ Auto-start in {JOINING_TIMER_SECONDS//60} minutes",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")],
+                [InlineKeyboardButton("🚀 Force Start", callback_data="force_start")]
+            ])
+        )
+        asyncio.create_task(auto_start(client, chat_id))
+
+    # ================= VOTE SYSTEM =================
     async def vote_system(client, message):
         chat_id = message.chat.id
-        print(f"🗳️ Starting VOTE system for chat: {chat_id}")
         
         if chat_id in active_votes and active_votes[chat_id].get("active"):
-            await message.reply(f"🗳️ Voting already in progress! Votes: {active_votes[chat_id]['count']}/3")
+            await message.reply(f"🗳️ Voting in progress! Votes: {active_votes[chat_id]['count']}/3")
             return
         
         active_votes[chat_id] = {"active": True, "count": 0, "users": [], "msg_id": None}
         
-        caption = """**# VOTING REQUIRED!**
+        caption = """**VOTING REQUIRED!**
 
-You are not an admin. At least 3 members must vote to start the game.
-
-Click 'Vote to Start' to participate.
+You are not an admin. 3 votes needed.
 
 Current votes: 0/3"""
         
@@ -122,12 +148,12 @@ Current votes: 0/3"""
             msg = await message.reply_photo(
                 VOTE_IMG, 
                 caption=caption,
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✔ Vote to Start", callback_data="vote")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote", callback_data="vote")]])
             )
         except:
             msg = await message.reply(
                 caption,
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✔ Vote to Start", callback_data="vote")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote", callback_data="vote")]])
             )
         
         active_votes[chat_id]["msg_id"] = msg.id
@@ -144,12 +170,11 @@ Current votes: 0/3"""
             return await callback.answer("No active voting!", show_alert=True)
         
         if user.id in vote["users"]:
-            return await callback.answer("You already voted!", show_alert=True)
+            return await callback.answer("Already voted!", show_alert=True)
         
         vote["users"].append(user.id)
         vote["count"] += 1
         
-        # Get voter names
         voters = []
         for uid in vote["users"]:
             try:
@@ -159,35 +184,30 @@ Current votes: 0/3"""
             except:
                 voters.append(f"• User_{uid}")
         
-        voters_text = "\n".join(voters)
-        
         if vote["count"] >= 3:
-            # Voting successful - Show SELECT GAME menu
             await callback.message.delete()
             await select_game_menu(client, callback.message)
             vote["active"] = False
             await callback.answer("✅ Voting successful!")
         else:
-            caption = f"""**# VOTING REQUIRED!**
+            caption = f"""**VOTING REQUIRED!**
 
-You are not an admin. At least 3 members must vote to start the game.
-
-Click 'Vote to Start' to participate.
+You are not an admin. 3 votes needed.
 
 Current votes: {vote['count']}/3
 
 **Voters:**
-{voters_text}"""
+{chr(10).join(voters)}"""
             
             try:
                 await callback.message.edit_caption(
                     caption=caption,
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✔ Vote to Start", callback_data="vote")]])
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote", callback_data="vote")]])
                 )
             except:
                 await callback.message.edit_text(
                     caption,
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✔ Vote to Start", callback_data="vote")]])
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote", callback_data="vote")]])
                 )
             await callback.answer(f"Voted! ({vote['count']}/3)")
 
@@ -199,7 +219,7 @@ Current votes: {vote['count']}/3
             try:
                 await client.edit_message_caption(
                     chat_id, vote["msg_id"],
-                    caption=f"⚠️ Voting expired! Got only {vote['count']}/3 votes.\nUse /start again."
+                    caption=f"⚠️ Voting expired! Got {vote['count']}/3 votes.\nUse /start again."
                 )
             except:
                 pass
@@ -214,7 +234,8 @@ Current votes: {vote['count']}/3
             return await callback.answer("No game!", show_alert=True)
         
         players = game.get("players", [])
-        text = f"🎉 Solo Mode Active!\n\nPlayers ({len(players)}):\n" + "\n".join([f"• {p['name']}" for p in players]) or "• No players"
+        ball_mode = game.get("ball_mode", 1)
+        text = f"🎉 Solo Mode Active! ({ball_mode} Ball)\n\nPlayers ({len(players)}):\n" + "\n".join([f"• {p['name']}" for p in players]) or "• No players"
         await callback.message.edit_text(
             text,
             reply_markup=InlineKeyboardMarkup([
@@ -240,14 +261,14 @@ Current votes: {vote['count']}/3
         game = games.get(chat_id)
         
         if not game:
-            return await message.reply("❌ No active game! Ask admin to start with /start")
+            return await message.reply("❌ No active game! Use /start")
         
         if game.get("status") != "waiting":
             return await message.reply("❌ Game already started!")
         
         if join_game(chat_id, message.from_user):
             game = games[chat_id]
-            await message.reply(f"🎉 {message.from_user.first_name} joined! (Player {len(game['players'])})")
+            await message.reply(f"🎉 {message.from_user.first_name} joined! ({len(game['players'])} players)")
 
     # ================= AUTO START =================
     async def auto_start(client, chat_id):
@@ -255,8 +276,6 @@ Current votes: {vote['count']}/3
         game = games.get(chat_id)
         if game and game["status"] == "waiting" and len(game["players"]) >= 1:
             await start_match(client, chat_id)
-        elif game and len(game["players"]) < 1:
-            await client.send_message(chat_id, "❌ Not enough players to start.")
 
     # ================= START MATCH =================
     async def start_match(client, chat_id):
@@ -312,7 +331,7 @@ Current votes: {vote['count']}/3
             set_bowling(chat_id, int(text))
             await client.send_video(
                 chat_id, BATTING_VIDEO,
-                caption=f"🏏 Now Batter: {game['current_batter']['name']}\n🔥 Send number (1-6) in GROUP"
+                caption=f"🏏 Batter: {game['current_batter']['name']}\n🔥 Send number (1-6) in GROUP"
             )
             await message.reply("✅ Bowling number sent!")
             break
@@ -363,7 +382,6 @@ Current votes: {vote['count']}/3
         if game.get("game_over"):
             return await message.reply(f"🏆 Game Over! {game['winner']['name']} wins!")
         
-        # Rotate players
         players = game["players"]
         idx = next((i for i, p in enumerate(players) if p["id"] == batter["id"]), 0)
         nxt = idx
