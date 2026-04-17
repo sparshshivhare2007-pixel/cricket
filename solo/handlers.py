@@ -1,4 +1,4 @@
-# handlers.py - Final No Emoji, No Refresh/Force Start
+# handlers.py - Complete with Timer and Warnings
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -120,11 +120,77 @@ Solo Play - 3 Ball"""
         
         await callback.message.delete()
         
+        # Send game created message
         await client.send_message(
             chat_id,
-            f"Game created! Join the game using /joingame ({JOINING_TIMER_SECONDS//60} minutes to join)\n⏰"
+            f"Game created! Join the game using /joingame (2 minutes to join)\n⏰"
         )
-        asyncio.create_task(auto_start(client, chat_id))
+        
+        # Start timer tasks
+        asyncio.create_task(start_join_timer(client, chat_id))
+
+    # ================= JOIN TIMER WITH WARNINGS =================
+    async def start_join_timer(client, chat_id):
+        game = games.get(chat_id)
+        if not game:
+            return
+        
+        # Wait 30 seconds (1 minute left warning)
+        await asyncio.sleep(60)
+        
+        game = games.get(chat_id)
+        if game and game["status"] == "waiting":
+            players_count = len(game.get("players", []))
+            await client.send_message(
+                chat_id,
+                f"1 minute left only, everyone /joingame fast!!"
+            )
+        
+        # Wait another 30 seconds (30 seconds left warning)
+        await asyncio.sleep(30)
+        
+        game = games.get(chat_id)
+        if game and game["status"] == "waiting":
+            players_count = len(game.get("players", []))
+            await client.send_message(
+                chat_id,
+                f"30 seconds left only, everyone /joingame fast!!"
+            )
+        
+        # Wait another 20 seconds (10 seconds left warning)
+        await asyncio.sleep(20)
+        
+        game = games.get(chat_id)
+        if game and game["status"] == "waiting":
+            players_count = len(game.get("players", []))
+            await client.send_message(
+                chat_id,
+                f"Last 10 seconds left only, /joingame !!",
+            )
+        
+        # Wait final 10 seconds
+        await asyncio.sleep(10)
+        
+        # Time's up - check players
+        game = games.get(chat_id)
+        if game and game["status"] == "waiting":
+            players_count = len(game.get("players", []))
+            
+            if players_count < 4:
+                await client.send_message(
+                    chat_id,
+                    f"Minimum 4 players required to start the game! 😭💔"
+                )
+                await asyncio.sleep(2)
+                await client.send_message(
+                    chat_id,
+                    f"⚠️ Failed to start the game."
+                )
+                # Clean up game
+                if chat_id in games:
+                    del games[chat_id]
+            else:
+                await start_match(client, chat_id)
 
     # ================= VOTE SYSTEM =================
     async def vote_system(client, message):
@@ -237,14 +303,13 @@ Voters:
         
         if join_game(chat_id, message.from_user):
             game = games[chat_id]
-            await message.reply(f"{message.from_user.first_name} joined! ({len(game['players'])} players)")
-
-    # ================= AUTO START =================
-    async def auto_start(client, chat_id):
-        await asyncio.sleep(JOINING_TIMER_SECONDS)
-        game = games.get(chat_id)
-        if game and game["status"] == "waiting" and len(game["players"]) >= 1:
-            await start_match(client, chat_id)
+            players_count = len(game["players"])
+            await message.reply(f"{message.from_user.first_name}, you've joined the game! (Player {players_count}) 🏴‍☠️")
+            
+            # Check if we have enough players (4) to start immediately
+            if players_count >= 4:
+                await message.reply("Enough players! Starting game...")
+                await start_match(client, chat_id)
 
     # ================= START MATCH =================
     async def start_match(client, chat_id):
