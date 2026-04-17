@@ -33,12 +33,14 @@ IMAGES_PATH = os.path.join(ASSETS_PATH, "images")
 # ========== GAME IMAGES (Local) ==========
 SELECT_GAME_IMAGE = os.path.join(IMAGES_PATH, "select_game.jpg")  # SELECT GAME wali image (admin ke liye)
 VOTE_IMAGE = os.path.join(IMAGES_PATH, "vote.jpg")  # VOTE wali image (member ke liye)
+SOLO_PLAY_IMAGE = os.path.join(IMAGES_PATH, "solo_play.jpg")  # SOLO PLAY MATCH wali image
 SOLO_GAME_START_IMAGE = os.path.join(IMAGES_PATH, "game_start.jpg")
 
 # Fallback URLs for images
 SELECT_GAME_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 VOTE_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 SOLO_GAME_START_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
+SOLO_PLAY_IMG = get_image(SOLO_PLAY_IMAGE, SOLO_PLAY_IMAGE_FALLBACK)
 
 # ========== SOLO MODE VIDEOS (Local) ==========
 BOWLING_VIDEO_PATH = os.path.join(VIDEOS_PATH, "bowling.mp4")
