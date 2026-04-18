@@ -18,18 +18,16 @@ async def is_admin(client, chat_id, user_id):
     except:
         return False
 
-def register_team_handlers(app):
-
-    # ================= STEP 1: TEAM MODE START =================
-    @app.on_callback_query(filters.regex("^mode_team$"))
-    async def team_mode_start(client, callback: CallbackQuery):
-        chat_id = callback.message.chat.id
-        
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("👑 I'm the Host", callback_data="team_become_host")]
-        ])
-        
-        caption = """**🏏 SOLO TREE COMMUNITY**
+# ================= TEAM MODE START FUNCTION (called from solo) =================
+async def team_mode_start(client, callback):
+    """Team mode start function - called from solo mode"""
+    chat_id = callback.message.chat.id
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("👑 I'm the Host", callback_data="team_become_host")]
+    ])
+    
+    caption = """**🏏 SOLO TREE COMMUNITY**
 
 **🎯 TEAM MATCH**
 
@@ -38,23 +36,28 @@ def register_team_handlers(app):
 Who will be the game host for this match? 🤔
 
 Click below to become the host 👇"""
-        
-        await callback.message.delete()
-        
-        try:
-            await client.send_photo(
-                chat_id,
-                TEAM_PLAY_IMG,
-                caption=caption,
-                reply_markup=keyboard
-            )
-        except:
-            await client.send_message(
-                chat_id,
-                caption,
-                reply_markup=keyboard
-            )
-        await callback.answer()
+    
+    try:
+        await client.send_photo(
+            chat_id,
+            TEAM_PLAY_IMG,
+            caption=caption,
+            reply_markup=keyboard
+        )
+    except:
+        await client.send_message(
+            chat_id,
+            caption,
+            reply_markup=keyboard
+        )
+    await callback.answer()
+
+def register_team_handlers(app):
+
+    # ================= STEP 1: TEAM MODE START (direct) =================
+    @app.on_callback_query(filters.regex("^mode_team$"))
+    async def team_mode_start_direct(client, callback: CallbackQuery):
+        await team_mode_start(client, callback)
 
     # ================= STEP 2: BECOME HOST =================
     @app.on_callback_query(filters.regex("^team_become_host$"))
