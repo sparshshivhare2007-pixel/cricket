@@ -46,7 +46,6 @@ def register_handlers(app):
     @app.on_message(filters.command("start") & filters.private)
     async def start_dm(client, message: Message):
         user_id = message.from_user.id
-        text = message.text.strip()
         
         # Check if user is a bowler in any active game
         for chat_id, game in games.items():
