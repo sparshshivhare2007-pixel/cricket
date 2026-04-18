@@ -6,6 +6,7 @@ from pyrogram.enums import ChatMemberStatus
 from config import *
 from solo.game import *
 from solo.scoreboard import build_scoreboard
+from solo.score import get_live_score
 import asyncio
 
 active_votes = {}
@@ -124,6 +125,11 @@ def register_handlers(app):
         else:
             await vote_system(client, message)
 
+    # ================= SCORE COMMAND =================
+    @app.on_message(filters.command("score") & filters.group)
+    async def score_cmd(client, message: Message):
+        await get_live_score(client, message)
+
     # ================= START DM =================
     @app.on_message(filters.command("start") & filters.private)
     async def start_dm(client, message: Message):
@@ -146,7 +152,8 @@ def register_handlers(app):
             "Add me to a group and use /start there!\n\n"
             "**Commands:**\n"
             "/start - Start game (Admin) or Vote (Member)\n"
-            "/joingame - Join an existing game"
+            "/joingame - Join an existing game\n"
+            "/score - Check live score"
         )
 
     # ================= SELECT GAME MENU =================
