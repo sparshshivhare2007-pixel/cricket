@@ -1,8 +1,8 @@
-# handlers.py - With Warnings, Reactions and Penalty
+# handlers.py - Complete Final Version
 
 from pyrogram import filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ReactionTypeEmoji
-from pyrogram.enums import ChatMemberStatus
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from pyrogram.enums import ChatMemberStatus, MessageMediaType
 from config import *
 from solo.game import *
 from solo.scoreboard import build_scoreboard
@@ -72,7 +72,7 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
             try:
                 await client.send_video(
                     chat_id,
-                    get_run_video(6),  # 6 run video
+                    get_run_video(6),
                     caption=f"❌ No message received from bowler [{bowler_name}](tg://user?id={user_id}), deducting 6 runs!",
                     disable_web_page_preview=True
                 )
@@ -511,7 +511,7 @@ Voters:
         
         # Add thumbs up reaction
         try:
-            await message.react(ReactionTypeEmoji(emoji="👍"))
+            await client.send_reaction(message.chat.id, message.id, "👍")
         except:
             pass
         
@@ -542,6 +542,9 @@ Voters:
             
             new_batter = game["current_batter"]
             await client.send_message(chat_id, f"Hey [{new_batter['name']}](tg://user?id={new_batter['id']}), now you're batter!")
+            
+            # Add "Get ready for the next ball" message
+            await client.send_message(chat_id, f"New batsman: [{new_batter['name']}](tg://user?id={new_batter['id']})\n\nGet ready for the next ball ⚾", disable_web_page_preview=True)
             
             if not game.get("game_over"):
                 new_bowler = game["current_bowler"]
