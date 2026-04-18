@@ -111,7 +111,7 @@ Solo Play - 3 Ball"""
         
         await client.send_message(
             chat_id,
-            f"Game created! Join the game using /joingame (2 minutes to join)\n⏰"
+            f"🎉Game created! Join the game using /joingame (2 minutes to join)\n⏰"
         )
         
         asyncio.create_task(start_join_timer(client, chat_id))
