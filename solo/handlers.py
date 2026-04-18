@@ -31,7 +31,7 @@ async def bowling_timeout(client, chat_id, user_id):
 
 def register_handlers(app):
 
-    # ================= START =================
+    # ================= START GROUP =================
     @app.on_message(filters.command("start") & filters.group)
     async def start_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -338,92 +338,62 @@ Voters:
         await send_bowling_video(client, chat_id, bowler)
 
     # ================= SEND BOWLING VIDEO =================
-async def send_bowling_video(client, chat_id, bowler):
-    game = games.get(chat_id)
-    if not game or game.get("status") != "playing" or game.get("game_over"):
-        return
-    
-    bot_username = BOT_USERNAME
-    # Direct DM link without any start parameter
-    dm_link = f"https://t.me/{bot_username}"
-    
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🎯 Click to Bowl", url=dm_link)]
-    ])
-    
-    await client.send_video(
-        chat_id, 
-        BOWLING_VIDEO,
-        caption=f"[{bowler['name']}](tg://user?id={bowler['id']}) now you can send number on bot pm, You have 1 min.",
-        reply_markup=keyboard
-    )
-
-# ================= START DM (Auto-detect bowler) =================
-@app.on_message(filters.command("start") & filters.private)
-async def start_dm(client, message: Message):
-    user_id = message.from_user.id
-    
-    # Check if user is a bowler in any active game
-    for chat_id, game in games.items():
-        if game.get("status") == "playing" and not game.get("game_over"):
-            bowler = game.get("current_bowler", {})
-            if bowler.get("id") == user_id and game.get("bowling_number") is None:
-                # Directly ask for bowling number without welcome message
-                await message.reply(
-                    "🎯 **Send bowling number (1-6)**\n\n"
-                    "Example: `4`\n\n"
-                    "⏰ You have 60 seconds!"
-                )
-                asyncio.create_task(bowling_timeout(client, chat_id, user_id))
-                return
-    
-    # Normal welcome message for non-bowlers
-    await message.reply(
-        "🏏 **Welcome to Cricket Game Bot!**\n\n"
-        "Use me in a group to play cricket games.\n"
-        "Add me to a group and use /start there!\n\n"
-        "**Commands:**\n"
-        "/start - Start game (Admin) or Vote (Member)\n"
-        "/joingame - Join an existing game"
-    )
-
-# ================= BOWLING DM (Direct number input) =================
-@app.on_message(filters.private & filters.text)
-async def bowling_dm(client, message):
-    user_id = message.from_user.id
-    text = message.text.strip()
-    
-    # Ignore /start command
-    if text.startswith("/start"):
-        return
-    
-    if not text.isdigit() or int(text) not in range(1, 7):
-        return await message.reply(INVALID_NUMBER)
-    
-    num = int(text)
-    
-    for chat_id, game in games.items():
-        if game.get("status") != "playing" or game.get("game_over"):
-            continue
-        if game.get("current_bowler", {}).get("id") != user_id:
-            continue
-        if game.get("bowling_number") is not None:
-            await message.reply("❌ You already bowled! Wait for your next turn.")
+    async def send_bowling_video(client, chat_id, bowler):
+        game = games.get(chat_id)
+        if not game or game.get("status") != "playing" or game.get("game_over"):
             return
         
-        set_bowling(chat_id, num)
-        await message.reply(f"✅ Bowling number {num} sent to game!")
+        bot_username = BOT_USERNAME
+        dm_link = f"https://t.me/{bot_username}"
         
-        batter = game["current_batter"]
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎯 Click to Bowl", url=dm_link)]
+        ])
+        
         await client.send_video(
             chat_id, 
-            BATTING_VIDEO,
-            caption=f"Hey [{batter['name']}](tg://user?id={batter['id']}), now you're batting! Send number (1-6) in GROUP"
+            BOWLING_VIDEO,
+            caption=f"[{bowler['name']}](tg://user?id={bowler['id']}) now you can send number on bot pm, You have 1 min.",
+            reply_markup=keyboard
         )
-        return
-    
-    await message.reply("❌ No active game found where you are the bowler!")
-    
+
+    # ================= BOWLING DM =================
+    @app.on_message(filters.private & filters.text)
+    async def bowling_dm(client, message):
+        user_id = message.from_user.id
+        text = message.text.strip()
+        
+        # Ignore /start command
+        if text.startswith("/start"):
+            return
+        
+        if not text.isdigit() or int(text) not in range(1, 7):
+            return await message.reply(INVALID_NUMBER)
+        
+        num = int(text)
+        
+        for chat_id, game in games.items():
+            if game.get("status") != "playing" or game.get("game_over"):
+                continue
+            if game.get("current_bowler", {}).get("id") != user_id:
+                continue
+            if game.get("bowling_number") is not None:
+                await message.reply("❌ You already bowled! Wait for your next turn.")
+                return
+            
+            set_bowling(chat_id, num)
+            await message.reply(f"✅ Bowling number {num} sent to game!")
+            
+            batter = game["current_batter"]
+            await client.send_video(
+                chat_id, 
+                BATTING_VIDEO,
+                caption=f"Hey [{batter['name']}](tg://user?id={batter['id']}), now you're batting! Send number (1-6) in GROUP"
+            )
+            return
+        
+        await message.reply("❌ No active game found where you are the bowler!")
+
     # ================= BATTING =================
     @app.on_message(filters.group & filters.text & ~filters.bot)
     async def batting_msg(client, message):
