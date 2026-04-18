@@ -87,22 +87,32 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
             # Send scoreboard after penalty
             await client.send_message(chat_id, build_scoreboard(game["players"], is_final=False))
             
-            # Update game state
+            # Update game state - SAME BOWLER CONTINUES
             game["bowling_number"] = None
             game["current_bowler_balls"] += 1
             game["total_balls_in_match"] += 1
             
-            # Check if bowler completed his overs
+            # Check if bowler completed his overs (3 balls)
             ball_mode = game.get("ball_mode", 3)
             if game["current_bowler_balls"] >= ball_mode:
-                # Change bowler
+                # Change bowler only after completing all balls
                 new_bowler_index = (game["current_bowler_index"] + 1) % len(game["players"])
+                # Make sure new bowler is not out
+                while game["players"][new_bowler_index].get("out", False) and new_bowler_index != game["current_bowler_index"]:
+                    new_bowler_index = (new_bowler_index + 1) % len(game["players"])
                 game["current_bowler_index"] = new_bowler_index
                 game["current_bowler"] = game["players"][new_bowler_index].copy()
                 game["current_bowler_balls"] = 0
                 await client.send_message(
                     chat_id,
                     f"Bowler changed! Now bowling: [{game['current_bowler']['name']}](tg://user?id={game['current_bowler']['id']})"
+                )
+            else:
+                # Same bowler continues
+                await client.send_message(
+                    chat_id,
+                    f"Same bowler [{bowler_name}](tg://user?id={user_id}) continues bowling! {game['current_bowler_balls']}/{ball_mode} balls bowled.",
+                    disable_web_page_preview=True
                 )
             
             # Send bowling video for next ball
