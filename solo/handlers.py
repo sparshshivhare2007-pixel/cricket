@@ -1,4 +1,4 @@
-# handlers.py - Final Complete Working Version (Fixed Game End)
+# handlers.py - Final Complete Working Version
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -329,7 +329,6 @@ Voters:
     # ================= SEND BOWLING VIDEO =================
     async def send_bowling_video(client, chat_id, bowler):
         """Send bowling video with button"""
-        # Check if game is still active
         game = games.get(chat_id)
         if not game or game.get("status") != "playing" or game.get("game_over"):
             return
@@ -378,7 +377,6 @@ Voters:
             set_bowling(chat_id, int(text))
             
             batter = game["current_batter"]
-            # Send batting video after bowler sends number
             await client.send_video(
                 chat_id, 
                 BATTING_VIDEO,
@@ -393,17 +391,15 @@ Voters:
         chat_id = message.chat.id
         game = games.get(chat_id)
         
-        # Check if game exists and is active
         if not game:
             return
         if game.get("status") != "playing":
             return
         if game.get("game_over"):
-            return  # Game ended, ignore all batting messages
+            return
         
-        # Check if bowling number is set
         if game.get("bowling_number") is None:
-            return  # Silent ignore, no message
+            return
         
         batter = game.get("current_batter")
         if not batter or message.from_user.id != batter.get("id"):
@@ -421,7 +417,6 @@ Voters:
         bowler = game["current_bowler"]
         ball_mode = game.get("ball_mode", 3)
         
-        # Send result video
         if result["type"] == "out":
             try:
                 await message.reply_video(OUT_VIDEO, caption=OUT_MESSAGE.format(
@@ -430,29 +425,23 @@ Voters:
                 await message.reply(OUT_MESSAGE.format(
                     batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
             
-            # Check game over
             if game.get("game_over"):
                 final_text = build_scoreboard(game["players"], is_final=True)
                 await message.reply(final_text)
-                # Delete game from memory
                 if chat_id in games:
                     del games[chat_id]
                 return
             
-            # Send scoreboard after out
             await message.reply(build_scoreboard(game["players"], is_final=False))
             
-            # New batter
             new_batter = game["current_batter"]
-            await message.reply(f"New batter: [{new_batter['name']}](tg://user?id={new_batter['id']})")
+            await message.reply(f"Hey [{new_batter['name']}](tg://user?id={new_batter['id']}), now you're batter!")
             
-            # Send bowling video for next ball (only if game not over)
             if not game.get("game_over"):
                 new_bowler = game["current_bowler"]
                 await send_bowling_video(client, chat_id, new_bowler)
             
         else:
-            # RUN scored
             try:
                 await message.reply_video(get_run_video(result["runs"]), caption=RUN_MESSAGE.format(
                     batter=batter["name"], runs=f"{result['runs']} run{'s' if result['runs'] > 1 else ''}",
@@ -462,14 +451,11 @@ Voters:
                     batter=batter["name"], runs=f"{result['runs']} run{'s' if result['runs'] > 1 else ''}",
                     bat=bat, bowler=bowler["name"], bowl=bow))
             
-            # After run - send bowling video for next ball (only if game not over)
             if not game.get("game_over"):
                 if game["current_bowler_balls"] >= ball_mode:
-                    # Bowler changed - show scoreboard once
                     await message.reply(build_scoreboard(game["players"], is_final=False))
                     new_bowler = game["current_bowler"]
                     await message.reply(f"Bowler changed! Now bowling: [{new_bowler['name']}](tg://user?id={new_bowler['id']})")
                     await send_bowling_video(client, chat_id, new_bowler)
                 else:
-                    # Same bowler continues
                     await send_bowling_video(client, chat_id, bowler)
