@@ -37,19 +37,12 @@ def register_handlers(app):
     # ================= SELECT GAME MENU =================
     async def select_game_menu(client, message):
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Solo", callback_data="mode_solo"), InlineKeyboardButton("Team", callback_data="mode_team")],
-            [InlineKeyboardButton("Start Auction", callback_data="mode_auction"), InlineKeyboardButton("Tournament Mode", callback_data="mode_tournament")],
+            [InlineKeyboardButton("👤Solo", callback_data="mode_solo"), InlineKeyboardButton("👥Team", callback_data="mode_team")],
+            [InlineKeyboardButton("⭐️Start Auction", callback_data="mode_auction"), InlineKeyboardButton("🏆Tournament Mode", callback_data="mode_tournament")],
             [InlineKeyboardButton("Cancel", callback_data="mode_cancel")]
         ])
         
-        caption = """SOLO TREE COMMUNITY
-
-SELECT GAME
-
-Solo Mode
-Team Match
-
-Select game mode:"""
+        caption = """Select game mode:"""
         
         try:
             await message.reply_photo(SELECT_GAME_IMG, caption=caption, reply_markup=keyboard)
@@ -80,11 +73,7 @@ Select game mode:"""
             [InlineKeyboardButton("Solo Play - 3 Ball", callback_data="ball_3")]
         ])
         
-        caption = """SOLO TREE COMMUNITY
-
-SOLO PLAY MATCH
-
-Choose the Bowling mode:
+        caption = """🥎 Choose the Bowling mode:
 
 Solo Play - 1 Ball
 Solo Play - 3 Ball"""
