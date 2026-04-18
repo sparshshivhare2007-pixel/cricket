@@ -1,4 +1,4 @@
-# handlers.py - Final Complete Working Version (Checked)
+# handlers.py - Final Complete Working Version
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -282,42 +282,27 @@ Voters:
         game = games[chat_id]
         players = game["players"]
         
-        # Send SOLO TREE COMMUNITY host image with player list
         host_text = "SOLO TREE COMMUNITY\n\nUnknown Host\n\nSolo Players\n\n"
         for i, p in enumerate(players, 1):
             name = f"@{p['username']}" if p.get("username") else p["name"]
             host_text += f"{i}. {name}\n"
         
         try:
-            await client.send_photo(
-                chat_id,
-                HOST_IMAGE_URL,
-                caption=host_text
-            )
+            await client.send_photo(chat_id, HOST_IMAGE_URL, caption=host_text)
         except:
             await client.send_message(chat_id, host_text)
         
-        # STEP 1: Batter announce
         batter = game["current_batter"]
-        await client.send_message(
-            chat_id,
-            f"Hey [{batter['name']}](tg://user?id={batter['id']}), now you're batter!"
-        )
+        await client.send_message(chat_id, f"Hey [{batter['name']}](tg://user?id={batter['id']}), now you're batter!")
         
-        # STEP 2: Bowler announce
         bowler = game["current_bowler"]
-        await client.send_message(
-            chat_id,
-            f"Hey [{bowler['name']}](tg://user?id={bowler['id']}), now you're bowling!"
-        )
+        await client.send_message(chat_id, f"Hey [{bowler['name']}](tg://user?id={bowler['id']}), now you're bowling!")
         
-        # STEP 3: Send bowling video with button
         await asyncio.sleep(1)
         await send_bowling_video(client, chat_id, bowler)
 
     # ================= SEND BOWLING VIDEO =================
     async def send_bowling_video(client, chat_id, bowler):
-        """Send bowling video with button"""
         game = games.get(chat_id)
         if not game or game.get("status") != "playing" or game.get("game_over"):
             return
@@ -386,7 +371,6 @@ Voters:
             return
         if game.get("game_over"):
             return
-        
         if game.get("bowling_number") is None:
             return
         
@@ -424,10 +408,7 @@ Voters:
             await message.reply(build_scoreboard(game["players"], is_final=False))
             
             new_batter = game["current_batter"]
-            await client.send_message(
-                chat_id,
-                f"Hey [{new_batter['name']}](tg://user?id={new_batter['id']}), now you're batter!"
-            )
+            await client.send_message(chat_id, f"Hey [{new_batter['name']}](tg://user?id={new_batter['id']}), now you're batter!")
             
             if not game.get("game_over"):
                 new_bowler = game["current_bowler"]
@@ -447,10 +428,7 @@ Voters:
                 if game["current_bowler_balls"] >= ball_mode:
                     await message.reply(build_scoreboard(game["players"], is_final=False))
                     new_bowler = game["current_bowler"]
-                    await client.send_message(
-                        chat_id,
-                        f"Bowler changed! Now bowling: [{new_bowler['name']}](tg://user?id={new_bowler['id']})"
-                    )
+                    await client.send_message(chat_id, f"Bowler changed! Now bowling: [{new_bowler['name']}](tg://user?id={new_bowler['id']})")
                     await send_bowling_video(client, chat_id, new_bowler)
                 else:
                     await send_bowling_video(client, chat_id, bowler)
