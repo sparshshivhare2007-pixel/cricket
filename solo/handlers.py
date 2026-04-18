@@ -387,7 +387,7 @@ Voters:
         if join_game(chat_id, message.from_user):
             game = games[chat_id]
             players_count = len(game["players"])
-            await message.reply(f"{message.from_user.first_name}, you've joined the game! (Player {players_count})")
+            await message.reply(f"🎉{message.from_user.first_name}, you've joined the game! (Player {players_count}) 👍")
 
     # ================= START GAME MATCH =================
     async def start_game_match(client, chat_id):
