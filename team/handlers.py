@@ -1,4 +1,4 @@
-# team/handlers.py - Complete Flow
+# team/handlers.py - Final Complete Version
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -97,8 +97,6 @@ def register_team_handlers(app):
         )
         await callback.answer()
 
-    # team/handlers.py - Add debug in create_team_cmd
-
     # ================= STEP 3: CREATE TEAM COMMAND =================
     @app.on_message(filters.command("create_team") & filters.group)
     async def create_team_cmd(client, message: Message):
@@ -106,11 +104,8 @@ def register_team_handlers(app):
         user_id = message.from_user.id
         
         print(f"🔍 DEBUG: /create_team command received from user {user_id} in chat {chat_id}")
-        print(f"🔍 DEBUG: team_hosts = {team_hosts}")
         
         host = team_hosts.get(chat_id)
-        print(f"🔍 DEBUG: host = {host}")
-        
         if not host:
             return await message.reply("❌ No game host found! Start team mode first.")
         
@@ -118,8 +113,6 @@ def register_team_handlers(app):
             return await message.reply("❌ Only the game host can create teams!")
         
         game = team_games.get(chat_id)
-        print(f"🔍 DEBUG: game = {game}")
-        
         if not game or game["status"] != "waiting_host":
             return await message.reply("❌ Teams already created or game in progress!")
         
@@ -232,6 +225,17 @@ def register_team_handlers(app):
         current_count = len(game["team_b"])
         
         await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team B! ({current_count}/{TEAM_SIZE} players)", disable_web_page_preview=True)
+        
+        if current_count >= TEAM_SIZE:
+            game["status"] = "captain_selection"
+            await client.send_message(
+                chat_id,
+                f"✅ Team B is complete! ({TEAM_SIZE}/{TEAM_SIZE} players)\n\n"
+                f"👋 Hey, now members are joined the teams! 🎉\n\n"
+                f"**Team A:** {len(game['team_a'])}/{TEAM_SIZE} players\n"
+                f"**Team B:** {len(game['team_b'])}/{TEAM_SIZE} players\n\n"
+                f"📝 Choose Team captains user /choose_cap 📝"
+            )
 
     # ================= TEAM B TIMER =================
     async def team_b_timer(client, chat_id):
