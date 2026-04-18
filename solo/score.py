@@ -9,7 +9,7 @@ async def get_live_score(client, message):
     game = games.get(chat_id)
     
     if not game:
-        await message.reply("❌ No active game in this chat!\n\nUse /start to create a game.")
+        await message.reply("No game is going on in this chat!")
         return
     
     if game.get("status") == "waiting":
