@@ -87,10 +87,14 @@ def register_team_handlers(app):
             "innings": None
         }
         
+        # Delete old message and send new one
+        await callback.message.delete()
+        
         caption = f"[{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏"
         
-        await callback.message.edit_caption(
-            caption=caption,
+        await client.send_message(
+            chat_id,
+            caption,
             disable_web_page_preview=True
         )
         await callback.answer()
