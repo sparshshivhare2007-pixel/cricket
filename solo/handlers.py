@@ -21,6 +21,14 @@ async def is_admin(client, chat_id, user_id):
     except:
         return False
 
+async def bowling_timeout(client, chat_id, user_id):
+    await asyncio.sleep(60)
+    game = games.get(chat_id)
+    if game and game.get("status") == "playing":
+        current_bowler = game.get("current_bowler", {})
+        if current_bowler.get("id") == user_id and game.get("bowling_number") is None:
+            await client.send_message(user_id, "⏰ Time's up! You took too long to bowl.")
+
 def register_handlers(app):
 
     # ================= START =================
@@ -33,6 +41,54 @@ def register_handlers(app):
             await select_game_menu(client, message)
         else:
             await vote_system(client, message)
+
+    # ================= START DM =================
+    @app.on_message(filters.command("start") & filters.private)
+    async def start_dm(client, message: Message):
+        user_id = message.from_user.id
+        text = message.text.strip()
+        
+        if text.startswith("/start bowl_"):
+            try:
+                parts = text.split("_")
+                if len(parts) >= 3:
+                    chat_id = int(parts[2])
+                    game = games.get(chat_id)
+                    
+                    if not game or game.get("status") != "playing" or game.get("game_over"):
+                        await message.reply("❌ Game is not active anymore!")
+                        return
+                    
+                    bowler = game["current_bowler"]
+                    if bowler["id"] != user_id:
+                        await message.reply("❌ It's not your turn to bowl!")
+                        return
+                    
+                    if game.get("bowling_number") is not None:
+                        await message.reply("❌ You already bowled! Wait for your next turn.")
+                        return
+                    
+                    await message.reply(
+                        "🎯 **Send bowling number (1-6)**\n\n"
+                        "Example: `4`\n\n"
+                        "⏰ You have 60 seconds!"
+                    )
+                    
+                    asyncio.create_task(bowling_timeout(client, chat_id, user_id))
+                    return
+            except Exception as e:
+                print(f"Error in bowling start: {e}")
+                await message.reply("❌ Invalid bowling session!")
+                return
+        
+        await message.reply(
+            "🏏 **Welcome to Cricket Game Bot!**\n\n"
+            "Use me in a group to play cricket games.\n"
+            "Add me to a group and use /start there!\n\n"
+            "**Commands:**\n"
+            "/start - Start game (Admin) or Vote (Member)\n"
+            "/joingame - Join an existing game"
+        )
 
     # ================= SELECT GAME MENU =================
     async def select_game_menu(client, message):
@@ -307,48 +363,42 @@ Voters:
         if not game or game.get("status") != "playing" or game.get("game_over"):
             return
         
+        bot_username = BOT_USERNAME
+        dm_link = f"https://t.me/{bot_username}?start=bowl_{chat_id}"
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎯 Click to Bowl", url=dm_link)]
+        ])
+        
         await client.send_video(
             chat_id, 
             BOWLING_VIDEO,
             caption=f"[{bowler['name']}](tg://user?id={bowler['id']}) now you can send number on bot pm, You have 1 min.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Bowling", callback_data="bowl")]])
+            reply_markup=keyboard
         )
-
-    # ================= BOWLING BUTTON =================
-    @app.on_callback_query(filters.regex("^bowl$"))
-    async def bowl_btn(client, callback):
-        chat_id = callback.message.chat.id
-        user = callback.from_user
-        game = games.get(chat_id)
-        
-        if not game or game.get("status") != "playing" or game.get("game_over"):
-            return await callback.answer("Game is over!", show_alert=True)
-        
-        bowler = game["current_bowler"]
-        if bowler["id"] != user.id:
-            return await callback.answer("Not your turn!", show_alert=True)
-        
-        await callback.answer("Check DM!")
-        try:
-            await client.send_message(user.id, "Send bowling number (1-6)")
-        except:
-            await callback.answer("Open DM first!", show_alert=True)
 
     # ================= BOWLING DM =================
     @app.on_message(filters.private & filters.text)
     async def bowling_dm(client, message):
         user_id = message.from_user.id
+        text = message.text.strip()
+        
+        if not text.isdigit() or int(text) not in range(1, 7):
+            return await message.reply(INVALID_NUMBER)
+        
+        num = int(text)
+        
         for chat_id, game in games.items():
             if game.get("status") != "playing" or game.get("game_over"):
                 continue
             if game.get("current_bowler", {}).get("id") != user_id:
                 continue
+            if game.get("bowling_number") is not None:
+                await message.reply("❌ You already bowled! Wait for your next turn.")
+                return
             
-            text = message.text.strip()
-            if not text.isdigit() or int(text) not in range(1, 7):
-                return await message.reply(INVALID_NUMBER)
-            
-            set_bowling(chat_id, int(text))
+            set_bowling(chat_id, num)
+            await message.reply(f"✅ Bowling number {num} sent to game!")
             
             batter = game["current_batter"]
             await client.send_video(
@@ -356,8 +406,9 @@ Voters:
                 BATTING_VIDEO,
                 caption=f"Hey [{batter['name']}](tg://user?id={batter['id']}), now you're batting! Send number (1-6) in GROUP"
             )
-            await message.reply("Bowling number sent!")
-            break
+            return
+        
+        await message.reply("❌ No active game found where you are the bowler!")
 
     # ================= BATTING =================
     @app.on_message(filters.group & filters.text & ~filters.bot)
