@@ -97,13 +97,20 @@ def register_team_handlers(app):
         )
         await callback.answer()
 
+    # team/handlers.py - Add debug in create_team_cmd
+
     # ================= STEP 3: CREATE TEAM COMMAND =================
     @app.on_message(filters.command("create_team") & filters.group)
     async def create_team_cmd(client, message: Message):
         chat_id = message.chat.id
         user_id = message.from_user.id
         
+        print(f"🔍 DEBUG: /create_team command received from user {user_id} in chat {chat_id}")
+        print(f"🔍 DEBUG: team_hosts = {team_hosts}")
+        
         host = team_hosts.get(chat_id)
+        print(f"🔍 DEBUG: host = {host}")
+        
         if not host:
             return await message.reply("❌ No game host found! Start team mode first.")
         
@@ -111,6 +118,8 @@ def register_team_handlers(app):
             return await message.reply("❌ Only the game host can create teams!")
         
         game = team_games.get(chat_id)
+        print(f"🔍 DEBUG: game = {game}")
+        
         if not game or game["status"] != "waiting_host":
             return await message.reply("❌ Teams already created or game in progress!")
         
@@ -123,7 +132,7 @@ def register_team_handlers(app):
         )
         
         asyncio.create_task(team_a_timer(client, chat_id))
-
+        
     # ================= JOIN TEAM A =================
     @app.on_message(filters.command("join_teamA") & filters.group)
     async def join_team_a_cmd(client, message: Message):
