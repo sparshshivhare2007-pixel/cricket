@@ -1,4 +1,4 @@
-# solo/game.py - Final Complete Working Version
+# solo/game.py - Fixed Bowler Change After Out
 
 import time
 
@@ -59,18 +59,10 @@ def start_match(chat_id):
         game["current_batter_index"] = 0
         game["current_batter"] = players[0].copy()
         
-        # Bowler index - next player who is not out
-        bowler_index = find_next_active_player(players, 0)
+        # Bowler index - next player (index 1)
+        bowler_index = 1 if len(players) > 1 else 0
         game["current_bowler_index"] = bowler_index
         game["current_bowler"] = players[bowler_index].copy()
-
-def find_next_active_player(players, current_index):
-    """Find next player who is not out"""
-    for i in range(1, len(players) + 1):
-        next_idx = (current_index + i) % len(players)
-        if not players[next_idx].get("out", False):
-            return next_idx
-    return current_index
 
 def set_bowling(chat_id, number):
     if chat_id in games:
@@ -90,7 +82,7 @@ def find_next_bowler(players, current_bowler_index, current_batter_index):
         next_idx = (current_bowler_index + i) % len(players)
         if not players[next_idx].get("out", False) and next_idx != current_batter_index:
             return next_idx
-    # If no other player, return next active player
+    # If no other player, return next active player (could be same as batter if only one left)
     for i in range(1, len(players) + 1):
         next_idx = (current_bowler_index + i) % len(players)
         if not players[next_idx].get("out", False):
@@ -130,7 +122,7 @@ def play_ball(chat_id, bat_number):
             game["winner"] = max(game["players"], key=lambda x: x.get("score", 0))
             return result
         elif len(active_players) == 1:
-            # Only one player left - he becomes winner when current batter is out
+            # Only one player left - GAME OVER, he is winner
             game["game_over"] = True
             game["winner"] = active_players[0]
             return result
@@ -150,18 +142,16 @@ def play_ball(chat_id, bat_number):
         game["current_bowler_balls"] += 1
         game["total_balls_in_match"] += 1
         
-        # Check if bowler completed his overs
-        ball_mode = game.get("ball_mode", 3)
-        if game["current_bowler_balls"] >= ball_mode:
-            # Change bowler
-            new_bowler_index = find_next_bowler(
-                game["players"], 
-                game["current_bowler_index"], 
-                game["current_batter_index"]
-            )
-            game["current_bowler_index"] = new_bowler_index
-            game["current_bowler"] = game["players"][new_bowler_index].copy()
-            game["current_bowler_balls"] = 0
+        # ALWAYS CHANGE BOWLER AFTER OUT (regardless of balls completed)
+        # Find new bowler (not the new batter)
+        new_bowler_index = find_next_bowler(
+            game["players"], 
+            game["current_bowler_index"], 
+            game["current_batter_index"]
+        )
+        game["current_bowler_index"] = new_bowler_index
+        game["current_bowler"] = game["players"][new_bowler_index].copy()
+        game["current_bowler_balls"] = 0
         
     else:
         # RUNS SCORED - NOT OUT
@@ -185,7 +175,7 @@ def play_ball(chat_id, bat_number):
         game["current_bowler_balls"] += 1
         game["total_balls_in_match"] += 1
         
-        # Check if bowler completed his overs
+        # Check if bowler completed his overs (only then change bowler on runs)
         ball_mode = game.get("ball_mode", 3)
         if game["current_bowler_balls"] >= ball_mode:
             # Change bowler
