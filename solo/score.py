@@ -30,7 +30,6 @@ async def get_live_score(client, message):
         bowler_balls = game.get("current_bowler_balls", 0)
         total_balls = game.get("total_balls_in_match", 0)
         
-        # Calculate total runs
         total_runs = sum(p.get('score', 0) for p in players)
         total_outs = len([p for p in players if p.get('out', False)])
         
@@ -48,7 +47,6 @@ async def get_live_score(client, message):
         score_text += f"   👤 {current_bowler.get('name', 'None')}\n"
         score_text += f"   🎯 Balls bowled: {bowler_balls}/{ball_mode}\n\n"
         
-        # Next players
         players_list = "\n".join([f"{i+1}. {p['name']} - {p.get('score', 0)} runs" for i, p in enumerate(players[:5])])
         if len(players) > 5:
             players_list += f"\n... and {len(players)-5} more"
