@@ -1,4 +1,4 @@
-# handlers.py - Final Complete Working Version
+# handlers.py - Final Complete Working Version (Checked)
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -435,7 +435,10 @@ Voters:
             await message.reply(build_scoreboard(game["players"], is_final=False))
             
             new_batter = game["current_batter"]
-            await message.reply(f"Hey [{new_batter['name']}](tg://user?id={new_batter['id']}), now you're batter!")
+            await client.send_message(
+                chat_id,
+                f"Hey [{new_batter['name']}](tg://user?id={new_batter['id']}), now you're batter!"
+            )
             
             if not game.get("game_over"):
                 new_bowler = game["current_bowler"]
@@ -455,7 +458,10 @@ Voters:
                 if game["current_bowler_balls"] >= ball_mode:
                     await message.reply(build_scoreboard(game["players"], is_final=False))
                     new_bowler = game["current_bowler"]
-                    await message.reply(f"Bowler changed! Now bowling: [{new_bowler['name']}](tg://user?id={new_bowler['id']})")
+                    await client.send_message(
+                        chat_id,
+                        f"Bowler changed! Now bowling: [{new_bowler['name']}](tg://user?id={new_bowler['id']})"
+                    )
                     await send_bowling_video(client, chat_id, new_bowler)
                 else:
                     await send_bowling_video(client, chat_id, bowler)
