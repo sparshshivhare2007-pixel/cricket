@@ -1,4 +1,4 @@
-# handlers.py - Final Complete Working Version
+# handlers.py - Final Complete Working Version (Fixed Game End)
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -329,6 +329,11 @@ Voters:
     # ================= SEND BOWLING VIDEO =================
     async def send_bowling_video(client, chat_id, bowler):
         """Send bowling video with button"""
+        # Check if game is still active
+        game = games.get(chat_id)
+        if not game or game.get("status") != "playing" or game.get("game_over"):
+            return
+        
         await client.send_video(
             chat_id, 
             BOWLING_VIDEO,
@@ -343,8 +348,8 @@ Voters:
         user = callback.from_user
         game = games.get(chat_id)
         
-        if not game or game["status"] != "playing":
-            return await callback.answer("No game!", show_alert=True)
+        if not game or game.get("status") != "playing" or game.get("game_over"):
+            return await callback.answer("Game is over!", show_alert=True)
         
         bowler = game["current_bowler"]
         if bowler["id"] != user.id:
@@ -361,7 +366,7 @@ Voters:
     async def bowling_dm(client, message):
         user_id = message.from_user.id
         for chat_id, game in games.items():
-            if game.get("status") != "playing":
+            if game.get("status") != "playing" or game.get("game_over"):
                 continue
             if game.get("current_bowler", {}).get("id") != user_id:
                 continue
@@ -388,10 +393,17 @@ Voters:
         chat_id = message.chat.id
         game = games.get(chat_id)
         
-        if not game or game.get("status") != "playing":
+        # Check if game exists and is active
+        if not game:
             return
+        if game.get("status") != "playing":
+            return
+        if game.get("game_over"):
+            return  # Game ended, ignore all batting messages
+        
+        # Check if bowling number is set
         if game.get("bowling_number") is None:
-            return await message.reply("Waiting for bowler!")
+            return  # Silent ignore, no message
         
         batter = game.get("current_batter")
         if not batter or message.from_user.id != batter.get("id"):
@@ -418,22 +430,26 @@ Voters:
                 await message.reply(OUT_MESSAGE.format(
                     batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
             
-            # Send scoreboard after out
-            await message.reply(build_scoreboard(game["players"], is_final=False))
-            
             # Check game over
             if game.get("game_over"):
                 final_text = build_scoreboard(game["players"], is_final=True)
                 await message.reply(final_text)
+                # Delete game from memory
+                if chat_id in games:
+                    del games[chat_id]
                 return
+            
+            # Send scoreboard after out
+            await message.reply(build_scoreboard(game["players"], is_final=False))
             
             # New batter
             new_batter = game["current_batter"]
             await message.reply(f"New batter: [{new_batter['name']}](tg://user?id={new_batter['id']})")
             
-            # Send bowling video for next ball
-            new_bowler = game["current_bowler"]
-            await send_bowling_video(client, chat_id, new_bowler)
+            # Send bowling video for next ball (only if game not over)
+            if not game.get("game_over"):
+                new_bowler = game["current_bowler"]
+                await send_bowling_video(client, chat_id, new_bowler)
             
         else:
             # RUN scored
@@ -446,13 +462,14 @@ Voters:
                     batter=batter["name"], runs=f"{result['runs']} run{'s' if result['runs'] > 1 else ''}",
                     bat=bat, bowler=bowler["name"], bowl=bow))
             
-            # After run - send bowling video for next ball
-            if game["current_bowler_balls"] >= ball_mode:
-                # Bowler changed - show scoreboard once
-                await message.reply(build_scoreboard(game["players"], is_final=False))
-                new_bowler = game["current_bowler"]
-                await message.reply(f"Bowler changed! Now bowling: [{new_bowler['name']}](tg://user?id={new_bowler['id']})")
-                await send_bowling_video(client, chat_id, new_bowler)
-            else:
-                # Same bowler continues
-                await send_bowling_video(client, chat_id, bowler)
+            # After run - send bowling video for next ball (only if game not over)
+            if not game.get("game_over"):
+                if game["current_bowler_balls"] >= ball_mode:
+                    # Bowler changed - show scoreboard once
+                    await message.reply(build_scoreboard(game["players"], is_final=False))
+                    new_bowler = game["current_bowler"]
+                    await message.reply(f"Bowler changed! Now bowling: [{new_bowler['name']}](tg://user?id={new_bowler['id']})")
+                    await send_bowling_video(client, chat_id, new_bowler)
+                else:
+                    # Same bowler continues
+                    await send_bowling_video(client, chat_id, bowler)
