@@ -1,7 +1,9 @@
+# team_handler.py
+
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pyrogram.enums import ChatMemberStatus
-from config import *
+from config import TEAM_PLAY_IMG
 import asyncio
 
 team_games = {}
@@ -32,10 +34,11 @@ async def team_mode_start(client, callback):
 Who will be the game host for this match? 🤔"""
 
     try:
-        # Use TEAM_PLAY_IMG from config for the image
+        # Using TEAM_PLAY_IMG from config
         await client.send_photo(chat_id, TEAM_PLAY_IMG, caption=caption, reply_markup=keyboard)
-    except:
-        # Fallback if image not found
+    except Exception as e:
+        print(f"Error sending team image: {e}")
+        # Fallback to text only if image fails
         await client.send_message(chat_id, caption, reply_markup=keyboard)
 
     await callback.answer()
@@ -71,7 +74,7 @@ def register_team_handlers(app):
             "team_b_captain": None
         }
 
-        # Delete the previous message with button
+        # Delete the previous message with button and image
         await callback.message.delete()
 
         # Send simple text message without any button
