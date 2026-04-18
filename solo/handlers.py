@@ -383,6 +383,10 @@ Voters:
         user_id = message.from_user.id
         text = message.text.strip()
         
+        # Ignore /start command
+        if text.startswith("/start"):
+            return
+        
         if not text.isdigit() or int(text) not in range(1, 7):
             return await message.reply(INVALID_NUMBER)
         
