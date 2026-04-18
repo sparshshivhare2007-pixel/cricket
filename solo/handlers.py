@@ -35,8 +35,7 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
             try:
                 await client.send_message(
                     chat_id,
-                    f"⚠️ Warning: [{bowler_name}](tg://user?id={user_id}), you have 30 seconds left to send a number!",
-                    disable_web_page_preview=True
+                    f"⚠️ Warning: [{bowler_name}](tg://user?id={user_id}), you have 30 seconds left to send a number!"
                 )
             except:
                 pass
@@ -50,8 +49,7 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
             try:
                 await client.send_message(
                     chat_id,
-                    f"⚠️ Warning: [{bowler_name}](tg://user?id={user_id}), you have 10 seconds left to send a number!",
-                    disable_web_page_preview=True
+                    f"⚠️ Warning: [{bowler_name}](tg://user?id={user_id}), you have 10 seconds left to send a number!"
                 )
             except:
                 pass
@@ -180,7 +178,6 @@ def register_handlers(app):
         if action == "team":
             await callback.message.delete()
             await callback.answer("Opening Team Mode...")
-            # Call team mode start function
             from team.handlers import team_mode_start
             await team_mode_start(client, callback)
             return
@@ -556,7 +553,7 @@ Voters:
             await client.send_message(chat_id, f"Hey [{new_batter['name']}](tg://user?id={new_batter['id']}), now you're batter!")
             
             # Add "Get ready for the next ball" message
-            await client.send_message(chat_id, f"New batsman: [{new_batter['name']}](tg://user?id={new_batter['id']})\n\nGet ready for the next ball ⚾", disable_web_page_preview=True)
+            await client.send_message(chat_id, f"New batsman: [{new_batter['name']}](tg://user?id={new_batter['id']})\n\nGet ready for the next ball ⚾")
             
             if not game.get("game_over"):
                 new_bowler = game["current_bowler"]
