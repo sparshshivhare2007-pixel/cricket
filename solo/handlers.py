@@ -48,39 +48,20 @@ def register_handlers(app):
         user_id = message.from_user.id
         text = message.text.strip()
         
-        if text.startswith("/start bowl_"):
-            try:
-                parts = text.split("_")
-                if len(parts) >= 3:
-                    chat_id = int(parts[2])
-                    game = games.get(chat_id)
-                    
-                    if not game or game.get("status") != "playing" or game.get("game_over"):
-                        await message.reply("❌ Game is not active anymore!")
-                        return
-                    
-                    bowler = game["current_bowler"]
-                    if bowler["id"] != user_id:
-                        await message.reply("❌ It's not your turn to bowl!")
-                        return
-                    
-                    if game.get("bowling_number") is not None:
-                        await message.reply("❌ You already bowled! Wait for your next turn.")
-                        return
-                    
+        # Check if user is a bowler in any active game
+        for chat_id, game in games.items():
+            if game.get("status") == "playing" and not game.get("game_over"):
+                bowler = game.get("current_bowler", {})
+                if bowler.get("id") == user_id and game.get("bowling_number") is None:
                     await message.reply(
                         "🎯 **Send bowling number (1-6)**\n\n"
                         "Example: `4`\n\n"
                         "⏰ You have 60 seconds!"
                     )
-                    
                     asyncio.create_task(bowling_timeout(client, chat_id, user_id))
                     return
-            except Exception as e:
-                print(f"Error in bowling start: {e}")
-                await message.reply("❌ Invalid bowling session!")
-                return
         
+        # Normal welcome message
         await message.reply(
             "🏏 **Welcome to Cricket Game Bot!**\n\n"
             "Use me in a group to play cricket games.\n"
@@ -364,7 +345,7 @@ Voters:
             return
         
         bot_username = BOT_USERNAME
-        dm_link = f"https://t.me/{bot_username}?start=bowl_{chat_id}"
+        dm_link = f"https://t.me/{bot_username}"
         
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🎯 Click to Bowl", url=dm_link)]
