@@ -1,8 +1,8 @@
-# handlers.py - Complete Final Version
+# handlers.py - Final Complete Working Version
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from pyrogram.enums import ChatMemberStatus, MessageMediaType
+from pyrogram.enums import ChatMemberStatus
 from config import *
 from solo.game import *
 from solo.scoreboard import build_scoreboard
@@ -61,6 +61,7 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
     if game and game.get("status") == "playing":
         current_bowler = game.get("current_bowler", {})
         if current_bowler.get("id") == user_id and game.get("bowling_number") is None:
+            
             # Penalty: -6 runs to bowler's score
             for player in game["players"]:
                 if player["id"] == user_id:
@@ -68,7 +69,7 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
                     player["history"].append("PENALTY(-6)")
                     break
             
-            # Send penalty video
+            # Send 6 run video (penalty)
             try:
                 await client.send_video(
                     chat_id,
@@ -85,7 +86,7 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
             # Send scoreboard after penalty
             await client.send_message(chat_id, build_scoreboard(game["players"], is_final=False))
             
-            # Set bowling number to None and continue
+            # Update game state
             game["bowling_number"] = None
             game["current_bowler_balls"] += 1
             game["total_balls_in_match"] += 1
