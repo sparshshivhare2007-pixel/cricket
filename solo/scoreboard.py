@@ -1,20 +1,15 @@
-# solo/scoreboard.py - Fixed Version
+# solo/scoreboard.py - Final Exact Output (No Stats)
 
 from config import SOLO_ICONS
 
 def build_scoreboard(players, is_final=False):
-    """Build scoreboard text from players list"""
+    """Build scoreboard text from players list - No stats section"""
     if not players:
         return "📊 No players yet!"
     
     text = "─────⊱ Sᴏʟᴏ Pʟᴀʏᴇʀ ⊰────\n\n"
     
-    # Calculate total runs and outs
-    total_runs = sum(p.get('score', 0) for p in players)
-    total_outs = len([p for p in players if p.get('out', False)])
-    active_players = len(players) - total_outs
-    
-    # Sort players by score (highest first) for final result
+    # Sort players by score for final result
     if is_final:
         sorted_players = sorted(players, key=lambda x: x.get('score', 0), reverse=True)
     else:
@@ -33,13 +28,13 @@ def build_scoreboard(players, is_final=False):
         text += f"{i}. {icon} {p['name']} {out_status}= {runs}({balls})\n"
         text += f"    ╰⊚ 4️⃣s: {fours:02}, 6️⃣s: {sixes:02} - ID: `{p['id']}`\n"
         
-        if history and not is_final:
+        if history:
             text += f"      ╰⊚ ({history})\n"
         
         text += "\n"
     
+    # Only add winner in final result (no stats)
     if is_final:
-        # Find winner
         winner = max(players, key=lambda x: x.get('score', 0))
         text += f"─────⊱ Rᴇsᴜʟᴛ ⊰─────\n"
         text += f"🏆 Wɪɴɴᴇʀ: {winner['name']}\n"
@@ -47,9 +42,5 @@ def build_scoreboard(players, is_final=False):
         if winner.get('balls', 0) > 0:
             text += f" ({winner['balls']} balls)"
         text += "\n"
-    else:
-        text += f"─────⊱ Sᴛᴀᴛs ⊰─────\n"
-        text += f"📊 Total: {total_runs}/{total_outs}\n"
-        text += f"👥 Active: {active_players}\n"
     
     return text
