@@ -70,18 +70,18 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
                     player["history"].append("PENALTY(-6)")
                     break
             
-            # Send 6 run video (penalty)
+            # Send 6 run video with caption
             try:
                 await client.send_video(
                     chat_id,
                     get_run_video(6),
-                    caption=f"❌ No message received from bowler [{bowler_name}](tg://user?id={user_id}), deducting 6 runs!",
-                    disable_web_page_preview=True
+                    caption=f"No message received from bowler, deducting 6 runs of bowler."
                 )
-            except:
+            except Exception as e:
+                print(f"Error sending 6 run video: {e}")
                 await client.send_message(
                     chat_id,
-                    f"❌ No message received from bowler [{bowler_name}](tg://user?id={user_id}), deducting 6 runs!"
+                    f"No message received from bowler, deducting 6 runs of bowler."
                 )
             
             # Send scoreboard after penalty
@@ -97,25 +97,11 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
             if game["current_bowler_balls"] >= ball_mode:
                 # Change bowler only after completing all balls
                 new_bowler_index = (game["current_bowler_index"] + 1) % len(game["players"])
-                # Make sure new bowler is not out
-                while game["players"][new_bowler_index].get("out", False) and new_bowler_index != game["current_bowler_index"]:
-                    new_bowler_index = (new_bowler_index + 1) % len(game["players"])
                 game["current_bowler_index"] = new_bowler_index
                 game["current_bowler"] = game["players"][new_bowler_index].copy()
                 game["current_bowler_balls"] = 0
-                await client.send_message(
-                    chat_id,
-                    f"Bowler changed! Now bowling: [{game['current_bowler']['name']}](tg://user?id={game['current_bowler']['id']})"
-                )
-            else:
-                # Same bowler continues
-                await client.send_message(
-                    chat_id,
-                    f"Same bowler [{bowler_name}](tg://user?id={user_id}) continues bowling! {game['current_bowler_balls']}/{ball_mode} balls bowled.",
-                    disable_web_page_preview=True
-                )
             
-            # Send bowling video for next ball
+            # Send bowling video for next ball (same bowler or new)
             await send_bowling_video(client, chat_id, game["current_bowler"])
     
     # Clean up
