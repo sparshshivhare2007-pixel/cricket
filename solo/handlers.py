@@ -1,4 +1,4 @@
-# handlers.py - Final Complete Working Version
+# solo/handlers.py - Final Complete Working Version
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -177,7 +177,15 @@ def register_handlers(app):
             await callback.answer("Cancelled")
             return
         
-        if action in ["team", "auction", "tournament"]:
+        if action == "team":
+            await callback.message.delete()
+            await callback.answer("Opening Team Mode...")
+            # Call team mode start function
+            from team.handlers import team_mode_start
+            await team_mode_start(client, callback)
+            return
+        
+        if action in ["auction", "tournament"]:
             await callback.answer(f"{action} mode coming soon!", show_alert=True)
             return
         
