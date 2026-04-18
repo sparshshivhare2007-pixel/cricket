@@ -29,13 +29,13 @@ async def team_mode_start(client, callback):
     
     caption = """**🏏 SOLO TREE COMMUNITY**
 
-**🎯 TEAM MATCH**
+**🔴 TEAM MATCH**
 
-**✨ New Game Alert! ✨**
+**⭐ New Game Alert! ⭐**
 
-Who will be the game host for this match? 🤔
+Who will be the game host for this match? 😉
 
-Click below to become the host 👇"""
+Click below to become the host 🏆"""
     
     try:
         await client.send_photo(
@@ -87,10 +87,9 @@ def register_team_handlers(app):
             "innings": None
         }
         
-        # Delete old message and send new one
         await callback.message.delete()
         
-        caption = f"[{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏"
+        caption = f"👑 [{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏"
         
         await client.send_message(
             chat_id,
@@ -159,7 +158,8 @@ def register_team_handlers(app):
         
         current_count = len(game["team_a"])
         
-        await message.reply(f"🎉 {user.first_name} joined Team A! ({current_count}/{TEAM_SIZE} players)")
+        # Clickable name mention
+        await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team A! ({current_count}/{TEAM_SIZE} players)", disable_web_page_preview=True)
         
         if current_count >= TEAM_SIZE:
             game["status"] = "team_creation_b"
@@ -185,7 +185,7 @@ def register_team_handlers(app):
             await client.send_message(
                 chat_id,
                 f"⏰ Time's up for Team A! ({team_a_count}/{TEAM_SIZE} players joined)\n\n"
-                f"🎉 Join Team B by sending /join_teamB 📣\n\n"
+                f"👥 Join Team B by sending /join_teamB 📣\n\n"
                 f"👥 Need {TEAM_SIZE} players for Team B\n"
                 f"⏰ You have 50 seconds to join Team B!"
             )
@@ -224,18 +224,25 @@ def register_team_handlers(app):
         
         current_count = len(game["team_b"])
         
-        await message.reply(f"🎉 {user.first_name} joined Team B! ({current_count}/{TEAM_SIZE} players)")
+        # Clickable name mention
+        await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team B! ({current_count}/{TEAM_SIZE} players)", disable_web_page_preview=True)
         
         if current_count >= TEAM_SIZE:
-            game["status"] = "ready"
+            game["status"] = "captain_selection"
+            
             await client.send_message(
                 chat_id,
                 f"✅ Team B is complete! ({TEAM_SIZE}/{TEAM_SIZE} players)\n\n"
                 f"📊 **Final Teams:**\n"
                 f"🏏 Team A: {len(game['team_a'])} players\n"
                 f"🏏 Team B: {len(game['team_b'])} players\n\n"
-                f"🎯 Type /start_match to begin the match!"
+                f"👑 Game Host, please choose captains for Team A and Team B:\n\n"
+                f"• 🏅 Choose Team A Captain\n"
+                f"• 🏅 Choose Team B Captain"
             )
+            
+            # Show captain selection buttons
+            await show_captain_selection(client, chat_id, game)
 
     # ================= TEAM B TIMER =================
     async def team_b_timer(client, chat_id):
@@ -243,8 +250,6 @@ def register_team_handlers(app):
         
         game = team_games.get(chat_id)
         if game and game["status"] == "team_creation_b":
-            game["status"] = "ready"
-            
             team_a_count = len(game["team_a"])
             team_b_count = len(game["team_b"])
             
@@ -261,13 +266,134 @@ def register_team_handlers(app):
                 if chat_id in team_hosts:
                     del team_hosts[chat_id]
             else:
+                game["status"] = "captain_selection"
                 await client.send_message(
                     chat_id,
                     f"✅ Teams are complete!\n\n"
                     f"**Team A:** {team_a_count}/{TEAM_SIZE} players\n"
                     f"**Team B:** {team_b_count}/{TEAM_SIZE} players\n\n"
-                    f"🎯 Type /start_match to begin the match!"
+                    f"👑 Game Host, please choose captains for Team A and Team B:\n\n"
+                    f"• 🏅 Choose Team A Captain\n"
+                    f"• 🏅 Choose Team B Captain"
                 )
+                await show_captain_selection(client, chat_id, game)
+
+    # ================= SHOW CAPTAIN SELECTION =================
+    async def show_captain_selection(client, chat_id, game):
+        """Show captain selection buttons to host"""
+        host_id = game["host_id"]
+        
+        # Create list of team A players (clickable)
+        team_a_buttons = []
+        for player in game["team_a"]:
+            team_a_buttons.append([InlineKeyboardButton(f"👤 {player['name']}", callback_data=f"cap_a_{player['id']}")])
+        
+        # Create list of team B players (clickable)
+        team_b_buttons = []
+        for player in game["team_b"]:
+            team_b_buttons.append([InlineKeyboardButton(f"👤 {player['name']}", callback_data=f"cap_b_{player['id']}")])
+        
+        # Send captain selection message to host only
+        try:
+            await client.send_message(
+                host_id,
+                f"🏅 **Select Team A Captain**\n\n",
+                reply_markup=InlineKeyboardMarkup(team_a_buttons)
+            )
+            await asyncio.sleep(1)
+            await client.send_message(
+                host_id,
+                f"🏅 **Select Team B Captain**\n\n",
+                reply_markup=InlineKeyboardMarkup(team_b_buttons)
+            )
+        except:
+            await client.send_message(
+                chat_id,
+                f"👑 Host [{game['host_name']}](tg://user?id={host_id}), please use /choose_cap command to select captains!",
+                disable_web_page_preview=True
+            )
+
+    # ================= CHOOSE CAPTAIN COMMAND =================
+    @app.on_message(filters.command("choose_cap") & filters.group)
+    async def choose_cap_cmd(client, message: Message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        
+        game = team_games.get(chat_id)
+        if not game or game["status"] != "captain_selection":
+            return await message.reply("❌ Captain selection is not open right now!")
+        
+        host = team_hosts.get(chat_id)
+        if not host or host["id"] != user_id:
+            return await message.reply("❌ Only the game host can select captains!")
+        
+        # Show captain selection buttons
+        await show_captain_selection(client, chat_id, game)
+
+    # ================= CAPTAIN SELECTION CALLBACK =================
+    @app.on_callback_query(filters.regex("^cap_a_"))
+    async def select_captain_a(client, callback: CallbackQuery):
+        chat_id = callback.message.chat.id
+        user_id = callback.from_user.id
+        player_id = int(callback.data.split("_")[2])
+        
+        game = team_games.get(chat_id)
+        if not game:
+            return await callback.answer("Game not found!", show_alert=True)
+        
+        host = team_hosts.get(chat_id)
+        if not host or host["id"] != user_id:
+            return await callback.answer("Only host can select captain!", show_alert=True)
+        
+        # Find player in Team A
+        for player in game["team_a"]:
+            if player["id"] == player_id:
+                game["team_a_captain"] = player["username"] or player["name"]
+                await callback.answer(f"Team A Captain: {player['name']}")
+                await callback.message.delete()
+                break
+        
+        # Check if both captains selected
+        if game["team_a_captain"] and game["team_b_captain"]:
+            game["status"] = "ready"
+            await client.send_message(
+                chat_id,
+                f"✅ **Captains Selected!**\n\n"
+                f"🏅 Team A Captain: @{game['team_a_captain']}\n"
+                f"🏅 Team B Captain: @{game['team_b_captain']}\n\n"
+                f"🎯 Type /start_match to begin the match!"
+            )
+
+    @app.on_callback_query(filters.regex("^cap_b_"))
+    async def select_captain_b(client, callback: CallbackQuery):
+        chat_id = callback.message.chat.id
+        user_id = callback.from_user.id
+        player_id = int(callback.data.split("_")[2])
+        
+        game = team_games.get(chat_id)
+        if not game:
+            return await callback.answer("Game not found!", show_alert=True)
+        
+        host = team_hosts.get(chat_id)
+        if not host or host["id"] != user_id:
+            return await callback.answer("Only host can select captain!", show_alert=True)
+        
+        for player in game["team_b"]:
+            if player["id"] == player_id:
+                game["team_b_captain"] = player["username"] or player["name"]
+                await callback.answer(f"Team B Captain: {player['name']}")
+                await callback.message.delete()
+                break
+        
+        if game["team_a_captain"] and game["team_b_captain"]:
+            game["status"] = "ready"
+            await client.send_message(
+                chat_id,
+                f"✅ **Captains Selected!**\n\n"
+                f"🏅 Team A Captain: @{game['team_a_captain']}\n"
+                f"🏅 Team B Captain: @{game['team_b_captain']}\n\n"
+                f"🎯 Type /start_match to begin the match!"
+            )
 
     # ================= MEMBER LIST COMMAND =================
     @app.on_message(filters.command("member_list") & filters.group)
@@ -281,24 +407,15 @@ def register_team_handlers(app):
         
         host_name = host.get("name", "Unknown") if host else "Unknown"
         
-        batting_team = game.get("current_team", "None")
-        innings = game.get("innings", "None")
-        
-        # Team A players with @username
+        # Team A players with clickable mention
         team_a_players = []
         for p in game.get("team_a", []):
-            if p.get("username"):
-                team_a_players.append(f"{len(team_a_players)+1}. @{p['username']}")
-            else:
-                team_a_players.append(f"{len(team_a_players)+1}. {p['name']}")
+            team_a_players.append(f"{len(team_a_players)+1}. [{p['name']}](tg://user?id={p['id']})")
         
-        # Team B players with @username
+        # Team B players with clickable mention
         team_b_players = []
         for p in game.get("team_b", []):
-            if p.get("username"):
-                team_b_players.append(f"{len(team_b_players)+1}. @{p['username']}")
-            else:
-                team_b_players.append(f"{len(team_b_players)+1}. {p['name']}")
+            team_b_players.append(f"{len(team_b_players)+1}. [{p['name']}](tg://user?id={p['id']})")
         
         # Captains
         team_a_captain = game.get("team_a_captain", "Not selected yet")
@@ -314,17 +431,7 @@ def register_team_handlers(app):
         else:
             team_b_captain_name = "Not selected yet"
         
-        # Build output
-        text = f"👽 **Game Host:** {host_name}\n\n"
-        text += f"🏏 **Batting:** Team {batting_team} (Innings {innings})\n"
-        
-        if batting_team == "A":
-            text += f"🎯 **Bowling:** Team B\n\n"
-        elif batting_team == "B":
-            text += f"🎯 **Bowling:** Team A\n\n"
-        else:
-            text += f"🎯 **Bowling:** Team None\n\n"
-        
+        text = f"👑 **Game Host:** [{host_name}](tg://user?id={host['id']})\n\n" if host else ""
         text += f"🎩 **Team A Captain:** {team_a_captain_name}\n"
         text += f"👒 **Team B Captain:** {team_b_captain_name}\n\n"
         
@@ -340,7 +447,7 @@ def register_team_handlers(app):
         else:
             text += "(No players joined yet)\n"
         
-        await message.reply(text)
+        await message.reply(text, disable_web_page_preview=True)
 
     # ================= START MATCH COMMAND =================
     @app.on_message(filters.command("start_match") & filters.group)
@@ -354,16 +461,10 @@ def register_team_handlers(app):
         
         game = team_games.get(chat_id)
         if not game or game["status"] != "ready":
-            return await message.reply("❌ Teams are not ready yet! Wait for both teams to complete.")
-        
-        if len(game["team_a"]) < TEAM_SIZE:
-            return await message.reply(f"❌ Team A needs {TEAM_SIZE - len(game['team_a'])} more players!")
-        
-        if len(game["team_b"]) < TEAM_SIZE:
-            return await message.reply(f"❌ Team B needs {TEAM_SIZE - len(game['team_b'])} more players!")
+            return await message.reply("❌ Teams are not ready yet! Complete captain selection first.")
         
         await message.reply("🚀 Match is starting...")
-        # Here you can add the match start logic (similar to solo mode but for teams)
+        # Here you can add the match start logic
 
     # ================= CANCEL TEAM =================
     @app.on_message(filters.command("cancel_team") & filters.group)
