@@ -1,7 +1,7 @@
-# handlers.py - Final Complete Working Version
+# handlers.py - With Warnings, Reactions and Penalty
 
 from pyrogram import filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ReactionTypeEmoji
 from pyrogram.enums import ChatMemberStatus
 from config import *
 from solo.game import *
@@ -9,6 +9,7 @@ from solo.scoreboard import build_scoreboard
 import asyncio
 
 active_votes = {}
+bowling_tasks = {}
 
 def get_run_video(runs):
     run_videos = {1: RUN_1_VIDEO, 2: RUN_2_VIDEO, 3: RUN_3_VIDEO, 4: RUN_4_VIDEO, 5: RUN_5_VIDEO, 6: RUN_6_VIDEO}
@@ -21,13 +22,93 @@ async def is_admin(client, chat_id, user_id):
     except:
         return False
 
-async def bowling_timeout(client, chat_id, user_id):
-    await asyncio.sleep(60)
+async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, message_id):
+    """Send warnings and penalty if bowler doesn't respond"""
+    
+    # 30 seconds warning
+    await asyncio.sleep(30)
     game = games.get(chat_id)
     if game and game.get("status") == "playing":
         current_bowler = game.get("current_bowler", {})
         if current_bowler.get("id") == user_id and game.get("bowling_number") is None:
-            await client.send_message(user_id, "⏰ Time's up! You took too long to bowl.")
+            try:
+                await client.send_message(
+                    chat_id,
+                    f"⚠️ Warning: [{bowler_name}](tg://user?id={user_id}), you have 30 seconds left to send a number!",
+                    disable_web_page_preview=True
+                )
+            except:
+                pass
+    
+    # 10 seconds warning
+    await asyncio.sleep(20)
+    game = games.get(chat_id)
+    if game and game.get("status") == "playing":
+        current_bowler = game.get("current_bowler", {})
+        if current_bowler.get("id") == user_id and game.get("bowling_number") is None:
+            try:
+                await client.send_message(
+                    chat_id,
+                    f"⚠️ Warning: [{bowler_name}](tg://user?id={user_id}), you have 10 seconds left to send a number!",
+                    disable_web_page_preview=True
+                )
+            except:
+                pass
+    
+    # Final 10 seconds
+    await asyncio.sleep(10)
+    game = games.get(chat_id)
+    if game and game.get("status") == "playing":
+        current_bowler = game.get("current_bowler", {})
+        if current_bowler.get("id") == user_id and game.get("bowling_number") is None:
+            # Penalty: -6 runs to bowler's score
+            for player in game["players"]:
+                if player["id"] == user_id:
+                    player["score"] -= 6
+                    player["history"].append("PENALTY(-6)")
+                    break
+            
+            # Send penalty video
+            try:
+                await client.send_video(
+                    chat_id,
+                    get_run_video(6),  # 6 run video
+                    caption=f"❌ No message received from bowler [{bowler_name}](tg://user?id={user_id}), deducting 6 runs!",
+                    disable_web_page_preview=True
+                )
+            except:
+                await client.send_message(
+                    chat_id,
+                    f"❌ No message received from bowler [{bowler_name}](tg://user?id={user_id}), deducting 6 runs!"
+                )
+            
+            # Send scoreboard after penalty
+            await client.send_message(chat_id, build_scoreboard(game["players"], is_final=False))
+            
+            # Set bowling number to None and continue
+            game["bowling_number"] = None
+            game["current_bowler_balls"] += 1
+            game["total_balls_in_match"] += 1
+            
+            # Check if bowler completed his overs
+            ball_mode = game.get("ball_mode", 3)
+            if game["current_bowler_balls"] >= ball_mode:
+                # Change bowler
+                new_bowler_index = (game["current_bowler_index"] + 1) % len(game["players"])
+                game["current_bowler_index"] = new_bowler_index
+                game["current_bowler"] = game["players"][new_bowler_index].copy()
+                game["current_bowler_balls"] = 0
+                await client.send_message(
+                    chat_id,
+                    f"Bowler changed! Now bowling: [{game['current_bowler']['name']}](tg://user?id={game['current_bowler']['id']})"
+                )
+            
+            # Send bowling video for next ball
+            await send_bowling_video(client, chat_id, game["current_bowler"])
+    
+    # Clean up
+    if chat_id in bowling_tasks:
+        del bowling_tasks[chat_id]
 
 def register_handlers(app):
 
@@ -47,7 +128,6 @@ def register_handlers(app):
     async def start_dm(client, message: Message):
         user_id = message.from_user.id
         
-        # Check if user is a bowler in any active game
         for chat_id, game in games.items():
             if game.get("status") == "playing" and not game.get("game_over"):
                 bowler = game.get("current_bowler", {})
@@ -57,10 +137,8 @@ def register_handlers(app):
                         "Example: `4`\n\n"
                         "⏰ You have 60 seconds!"
                     )
-                    asyncio.create_task(bowling_timeout(client, chat_id, user_id))
                     return
         
-        # Normal welcome message
         await message.reply(
             "🏏 **Welcome to Cricket Game Bot!**\n\n"
             "Use me in a group to play cricket games.\n"
@@ -350,12 +428,22 @@ Voters:
             [InlineKeyboardButton("🎯 Click to Bowl", url=dm_link)]
         ])
         
-        await client.send_video(
+        msg = await client.send_video(
             chat_id, 
             BOWLING_VIDEO,
             caption=f"[{bowler['name']}](tg://user?id={bowler['id']}) now you can send number on bot pm, You have 1 min.",
             reply_markup=keyboard
         )
+        
+        # Start timeout task with warnings
+        if chat_id in bowling_tasks:
+            try:
+                bowling_tasks[chat_id].cancel()
+            except:
+                pass
+        
+        task = asyncio.create_task(bowling_timeout_with_warnings(client, chat_id, bowler["id"], bowler["name"], msg.id))
+        bowling_tasks[chat_id] = task
 
     # ================= BOWLING DM =================
     @app.on_message(filters.private & filters.text)
@@ -363,7 +451,6 @@ Voters:
         user_id = message.from_user.id
         text = message.text.strip()
         
-        # Ignore /start command
         if text.startswith("/start"):
             return
         
@@ -380,6 +467,11 @@ Voters:
             if game.get("bowling_number") is not None:
                 await message.reply("❌ You already bowled! Wait for your next turn.")
                 return
+            
+            # Cancel timeout task
+            if chat_id in bowling_tasks:
+                bowling_tasks[chat_id].cancel()
+                del bowling_tasks[chat_id]
             
             set_bowling(chat_id, num)
             await message.reply(f"✅ Bowling number {num} sent to game!")
@@ -416,6 +508,12 @@ Voters:
         text = message.text.strip()
         if not text.isdigit() or int(text) not in range(1, 7):
             return await message.reply(INVALID_NUMBER)
+        
+        # Add thumbs up reaction
+        try:
+            await message.react(ReactionTypeEmoji(emoji="👍"))
+        except:
+            pass
         
         bat = int(text)
         result = play_ball(chat_id, bat)
