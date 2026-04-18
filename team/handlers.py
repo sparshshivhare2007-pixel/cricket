@@ -27,14 +27,15 @@ async def team_mode_start(client, callback):
         [InlineKeyboardButton("👑 I'm the Host", callback_data="team_become_host")]
     ])
 
-    caption = """🏏 **TEAM MATCH MODE**
+    caption = """🎉 **New Game Alert!** 🎉
 
-Click below to become host and create teams!
-"""
+Who will be the game host for this match? 🤔"""
 
     try:
+        # Use TEAM_PLAY_IMG from config for the image
         await client.send_photo(chat_id, TEAM_PLAY_IMG, caption=caption, reply_markup=keyboard)
     except:
+        # Fallback if image not found
         await client.send_message(chat_id, caption, reply_markup=keyboard)
 
     await callback.answer()
@@ -42,13 +43,13 @@ Click below to become host and create teams!
 
 def register_team_handlers(app):
 
-    # ================= START =================
+    # ================= START - MODE SELECTION =================
     @app.on_callback_query(filters.regex("^mode_team$"))
     async def team_mode_start_direct(client, callback: CallbackQuery):
         await team_mode_start(client, callback)
 
 
-    # ================= HOST =================
+    # ================= HOST SELECTION =================
     @app.on_callback_query(filters.regex("^team_become_host$"))
     async def team_become_host(client, callback: CallbackQuery):
         chat_id = callback.message.chat.id
@@ -70,10 +71,10 @@ def register_team_handlers(app):
             "team_b_captain": None
         }
 
-        # Delete the previous message
+        # Delete the previous message with button
         await callback.message.delete()
 
-        # Send message without inline button - using /create_team command
+        # Send simple text message without any button
         await client.send_message(
             chat_id,
             f"👑 {user.first_name} is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏"
@@ -92,10 +93,10 @@ def register_team_handlers(app):
         game = team_games.get(chat_id)
 
         if not host or host["id"] != user_id:
-            return await message.reply("❌ Only host can create team!")
+            return await message.reply("❌ Only host can create teams!")
 
         if not game or game["status"] != "host_selected":
-            return await message.reply("❌ Invalid game state!")
+            return await message.reply("❌ Invalid game state! Use /create_team only after becoming host.")
 
         game["status"] = "team_a_join"
 
@@ -201,7 +202,7 @@ def register_team_handlers(app):
             await start_captain_selection(client, chat_id)
 
 
-    # ================= CAPTAIN =================
+    # ================= CAPTAIN SELECTION =================
     async def start_captain_selection(client, chat_id):
         game = team_games.get(chat_id)
         if not game:
@@ -240,12 +241,14 @@ def register_team_handlers(app):
             return await callback.answer("Game not found!")
 
         pid = int(callback.data.split("_")[1])
+        selected_name = ""
         for p in game["team_a"]:
             if p["id"] == pid:
                 game["team_a_captain"] = p["name"]
+                selected_name = p["name"]
 
         await callback.message.delete()
-        await callback.answer(f"✅ {p['name']} is now Team A Captain!")
+        await callback.answer(f"✅ {selected_name} is now Team A Captain!")
 
         await check_ready(client, chat_id)
 
@@ -259,12 +262,14 @@ def register_team_handlers(app):
             return await callback.answer("Game not found!")
 
         pid = int(callback.data.split("_")[1])
+        selected_name = ""
         for p in game["team_b"]:
             if p["id"] == pid:
                 game["team_b_captain"] = p["name"]
+                selected_name = p["name"]
 
         await callback.message.delete()
-        await callback.answer(f"✅ {p['name']} is now Team B Captain!")
+        await callback.answer(f"✅ {selected_name} is now Team B Captain!")
 
         await check_ready(client, chat_id)
 
