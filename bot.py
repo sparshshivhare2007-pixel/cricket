@@ -3,7 +3,6 @@
 from pyrogram import Client
 from config import BOT_TOKEN, API_ID, API_HASH
 from solo.handlers import register_handlers as register_solo_handlers
-from team import register_team_handlers
 
 print("🚀 Starting Cricket Game Bot...")
 print(f"API_ID: {API_ID}")
