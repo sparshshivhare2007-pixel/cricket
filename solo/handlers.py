@@ -380,7 +380,7 @@ Who will be the game host for this match? 🤔"""
         
         current = len(game["team_a"])
         username_display = f"@{added_user.username}" if added_user.username else added_user.first_name
-        await message.reply(f"👑 Host added {username_display} to Team A! ({current} players)")
+        await message.reply(f"added {username_display} to Team A!")
 
     # ================= ADD TO TEAM B (HOST ONLY) =================
     @app.on_message(filters.command("add_B") & filters.group)
@@ -428,7 +428,7 @@ Who will be the game host for this match? 🤔"""
         
         current = len(game["team_b"])
         username_display = f"@{added_user.username}" if added_user.username else added_user.first_name
-        await message.reply(f"👑 Host added {username_display} to Team B! ({current} players)")
+        await message.reply(f"added {username_display} to Team B!")
 
     # ================= START MATCH =================
     @app.on_message(filters.command("start_match") & filters.group)
