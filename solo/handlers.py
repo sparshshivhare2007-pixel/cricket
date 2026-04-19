@@ -1,4 +1,4 @@
-# solo/handlers.py - Final Complete Working Version (Solo + Team Mode)
+# solo/handlers.py - Final Complete Working Version
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -237,7 +237,7 @@ Click below to become the host 🏆"""
         }
         
         await callback.message.delete()
-        await client.send_message(chat_id, f" [{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏")
+        await client.send_message(chat_id, f"👑 [{user.first_name}](tg://user?id={user.id}) is now the game host! Use /create_team to start!")
         await callback.answer()
 
     # ================= CREATE TEAM COMMAND =================
@@ -265,7 +265,9 @@ Click below to become the host 🏆"""
         game["status"] = "team_creation_a"
         
         await message.reply(
-            f"🎉 Team creation is underway! Join Team A by sending /join_teamA 📣"
+            f"🎉 Team creation is underway! Join Team A by sending /join_teamA 📣\n\n"
+            f"👥 Need {TEAM_SIZE} players for Team A\n"
+            f"⏰ You have 50 seconds to join Team A!"
         )
         
         asyncio.create_task(team_a_timer(client, chat_id))
@@ -356,7 +358,6 @@ Click below to become the host 🏆"""
         
         await message.reply("🚀 Match is starting...\n\n🏏 Team A will bat first!")
         
-        # Start Team A batting
         await start_team_batting(client, chat_id, "A")
 
     # ================= TEAM BATTING =================
@@ -368,7 +369,6 @@ Click below to become the host 🏆"""
         team_key = f"team_{team.lower()}"
         players = game[team_key]
         
-        # Reset players for batting
         for p in players:
             p["score"] = 0
             p["balls"] = 0
@@ -633,6 +633,7 @@ Voters:
         if not game or game.get("status") != "playing" or game.get("game_over"):
             return
         
+        batter = game["current_batter"]
         bot_username = BOT_USERNAME
         dm_link = f"https://t.me/{bot_username}"
         
@@ -640,20 +641,32 @@ Voters:
             [InlineKeyboardButton("🎯 Click to Bowl", url=dm_link)]
         ])
         
-        msg = await client.send_video(
+        # Group mein bowling video
+        await client.send_video(
             chat_id, 
             BOWLING_VIDEO,
             caption=f"[{bowler['name']}](tg://user?id={bowler['id']}) now you can send number on bot pm, You have 1 min.",
             reply_markup=keyboard
         )
         
+        # DM mein bowler ko current batter ka message
+        try:
+            await client.send_message(
+                bowler["id"],
+                f"Current batter: [{batter['name']}](tg://user?id={batter['id']})\n\nSend Your number:",
+                disable_web_page_preview=True
+            )
+        except:
+            pass
+        
+        # Start timeout task with warnings
         if chat_id in bowling_tasks:
             try:
                 bowling_tasks[chat_id].cancel()
             except:
                 pass
         
-        task = asyncio.create_task(bowling_timeout_with_warnings(client, chat_id, bowler["id"], bowler["name"], msg.id))
+        task = asyncio.create_task(bowling_timeout_with_warnings(client, chat_id, bowler["id"], bowler["name"], None))
         bowling_tasks[chat_id] = task
 
     # ================= BOWLING DM =================
