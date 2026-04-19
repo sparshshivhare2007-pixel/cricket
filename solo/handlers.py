@@ -272,13 +272,23 @@ Who will be the game host for this match? 🤔"""
         chat_id = message.chat.id
         user = message.from_user
         game = team_games.get(chat_id)
+        host = team_hosts.get(chat_id)
         
         if not game or game["status"] != "team_creation_a":
             await message.reply("❌ Team A is not open for joining!")
             return
         
-        if len(game["team_a"]) >= TEAM_SIZE:
-            await message.reply(f"❌ Team A is full! ({TEAM_SIZE}/{TEAM_SIZE} players)")
+        # Host cannot join
+        if host and host["id"] == user.id:
+            await message.reply("❌ You are the host! Host cannot join any team.")
+            return
+        
+        if user.id in [p["id"] for p in game["team_a"]]:
+            await message.reply("❌ You already joined Team A!")
+            return
+        
+        if user.id in [p["id"] for p in game["team_b"]]:
+            await message.reply("❌ You already joined Team B!")
             return
         
         game["team_a"].append({
@@ -287,7 +297,7 @@ Who will be the game host for this match? 🤔"""
         })
         
         current = len(game["team_a"])
-        await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team A! ({current}/{TEAM_SIZE} players)")
+        await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team A! ({current} players)")
 
     # ================= TEAM A TIMER =================
     async def team_a_timer(client, chat_id):
@@ -295,7 +305,7 @@ Who will be the game host for this match? 🤔"""
         game = team_games.get(chat_id)
         if game and game["status"] == "team_creation_a":
             game["status"] = "team_creation_b"
-            await client.send_message(chat_id, f"⏰ Time's up for Team A!\n\n🎉 Join Team B by sending /join_teamB 📣")
+            await client.send_message(chat_id, f"⏰ Time's up for Team A! ({len(game['team_a'])} players joined)\n\n🎉 Join Team B by sending /join_teamB 📣")
 
     # ================= JOIN TEAM B =================
     @app.on_message(filters.command("join_teamB") & filters.group)
@@ -303,13 +313,23 @@ Who will be the game host for this match? 🤔"""
         chat_id = message.chat.id
         user = message.from_user
         game = team_games.get(chat_id)
+        host = team_hosts.get(chat_id)
         
         if not game or game["status"] != "team_creation_b":
             await message.reply("❌ Team B is not open for joining!")
             return
         
-        if len(game["team_b"]) >= TEAM_SIZE:
-            await message.reply(f"❌ Team B is full! ({TEAM_SIZE}/{TEAM_SIZE} players)")
+        # Host cannot join
+        if host and host["id"] == user.id:
+            await message.reply("❌ You are the host! Host cannot join any team.")
+            return
+        
+        if user.id in [p["id"] for p in game["team_b"]]:
+            await message.reply("❌ You already joined Team B!")
+            return
+        
+        if user.id in [p["id"] for p in game["team_a"]]:
+            await message.reply("❌ You already joined Team A!")
             return
         
         game["team_b"].append({
@@ -318,7 +338,7 @@ Who will be the game host for this match? 🤔"""
         })
         
         current = len(game["team_b"])
-        await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team B! ({current}/{TEAM_SIZE} players)")
+        await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team B! ({current} players)")
 
     # ================= TEAM B TIMER =================
     async def team_b_timer(client, chat_id):
@@ -380,7 +400,7 @@ Who will be the game host for this match? 🤔"""
         
         current = len(game["team_a"])
         username_display = f"@{added_user.username}" if added_user.username else added_user.first_name
-        await message.reply(f"added {username_display} to Team A!")
+        await message.reply(f"added {username_display} to Team A! ({current} players)")
 
     # ================= ADD TO TEAM B (HOST ONLY) =================
     @app.on_message(filters.command("add_B") & filters.group)
@@ -428,7 +448,7 @@ Who will be the game host for this match? 🤔"""
         
         current = len(game["team_b"])
         username_display = f"@{added_user.username}" if added_user.username else added_user.first_name
-        await message.reply(f"added {username_display} to Team B!")
+        await message.reply(f"added {username_display} to Team B! ({current} players)")
 
     # ================= START MATCH =================
     @app.on_message(filters.command("start_match") & filters.group)
@@ -443,7 +463,7 @@ Who will be the game host for this match? 🤔"""
         
         game = team_games.get(chat_id)
         if not game or game["status"] != "ready":
-            await message.reply("❌ Teams not ready! Need 11 players each.")
+            await message.reply("❌ Teams not ready!")
             return
         
         await message.reply("🚀 Match is starting...\n\n🏏 Team A will bat first!")
