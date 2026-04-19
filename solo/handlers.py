@@ -334,6 +334,102 @@ Who will be the game host for this match? 🤔"""
                 f"🎯 Type /start_match to begin the match!"
             )
 
+    # ================= ADD TO TEAM A (HOST ONLY) =================
+    @app.on_message(filters.command("add_A") & filters.group)
+    async def add_to_team_a_cmd(client, message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        
+        host = team_hosts.get(chat_id)
+        if not host or host["id"] != user_id:
+            await message.reply("❌ Only host can add players to Team A!")
+            return
+        
+        game = team_games.get(chat_id)
+        if not game or game["status"] not in ["team_creation_a", "team_creation_b", "ready"]:
+            await message.reply("❌ Cannot add players now!")
+            return
+        
+        added_user = None
+        if message.reply_to_message:
+            added_user = message.reply_to_message.from_user
+        elif message.command and len(message.command) > 1:
+            username = message.command[1].replace("@", "")
+            try:
+                added_user = await client.get_users(username)
+            except:
+                await message.reply(f"❌ User @{username} not found!")
+                return
+        
+        if not added_user:
+            await message.reply("❌ Usage: /add_A @username or reply to a user's message")
+            return
+        
+        if added_user.id in [p["id"] for p in game["team_a"]]:
+            await message.reply(f"❌ {added_user.first_name} already in Team A!")
+            return
+        
+        if added_user.id in [p["id"] for p in game["team_b"]]:
+            await message.reply(f"❌ {added_user.first_name} already in Team B!")
+            return
+        
+        game["team_a"].append({
+            "id": added_user.id, "name": added_user.first_name, "username": added_user.username,
+            "score": 0, "balls": 0, "fours": 0, "sixes": 0, "out": False, "history": []
+        })
+        
+        current = len(game["team_a"])
+        username_display = f"@{added_user.username}" if added_user.username else added_user.first_name
+        await message.reply(f"👑 Host added {username_display} to Team A! ({current} players)")
+
+    # ================= ADD TO TEAM B (HOST ONLY) =================
+    @app.on_message(filters.command("add_B") & filters.group)
+    async def add_to_team_b_cmd(client, message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        
+        host = team_hosts.get(chat_id)
+        if not host or host["id"] != user_id:
+            await message.reply("❌ Only host can add players to Team B!")
+            return
+        
+        game = team_games.get(chat_id)
+        if not game or game["status"] not in ["team_creation_b", "ready"]:
+            await message.reply("❌ Cannot add players to Team B now!")
+            return
+        
+        added_user = None
+        if message.reply_to_message:
+            added_user = message.reply_to_message.from_user
+        elif message.command and len(message.command) > 1:
+            username = message.command[1].replace("@", "")
+            try:
+                added_user = await client.get_users(username)
+            except:
+                await message.reply(f"❌ User @{username} not found!")
+                return
+        
+        if not added_user:
+            await message.reply("❌ Usage: /add_B @username or reply to a user's message")
+            return
+        
+        if added_user.id in [p["id"] for p in game["team_b"]]:
+            await message.reply(f"❌ {added_user.first_name} already in Team B!")
+            return
+        
+        if added_user.id in [p["id"] for p in game["team_a"]]:
+            await message.reply(f"❌ {added_user.first_name} already in Team A!")
+            return
+        
+        game["team_b"].append({
+            "id": added_user.id, "name": added_user.first_name, "username": added_user.username,
+            "score": 0, "balls": 0, "fours": 0, "sixes": 0, "out": False, "history": []
+        })
+        
+        current = len(game["team_b"])
+        username_display = f"@{added_user.username}" if added_user.username else added_user.first_name
+        await message.reply(f"👑 Host added {username_display} to Team B! ({current} players)")
+
     # ================= START MATCH =================
     @app.on_message(filters.command("start_match") & filters.group)
     async def start_match_cmd(client, message):
@@ -635,7 +731,6 @@ Voters:
             [InlineKeyboardButton("🎯 Click to Bowl", url=dm_link)]
         ])
         
-        # Group mein bowling video
         await client.send_video(
             chat_id, 
             BOWLING_VIDEO,
@@ -643,7 +738,6 @@ Voters:
             reply_markup=keyboard
         )
         
-        # DM mein bowler ko current batter ka message
         try:
             await client.send_message(
                 bowler["id"],
@@ -653,7 +747,6 @@ Voters:
         except:
             pass
         
-        # Start timeout task with warnings
         if chat_id in bowling_tasks:
             try:
                 bowling_tasks[chat_id].cancel()
