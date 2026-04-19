@@ -190,13 +190,9 @@ def register_handlers(app):
             [InlineKeyboardButton("👑 I'm the Host", callback_data="team_become_host")]
         ])
         
-        caption = """**🏏 TEAM MATCH**
+        caption = """🎉 New Game Alert! 🎉 
 
-**⭐ New Game Alert! ⭐**
-
-Who will be the game host?
-
-Click below to become the host 🏆"""
+Who will be the game host for this match? 🤔"""
         
         try:
             await client.send_photo(chat_id, TEAM_PLAY_IMG, caption=caption, reply_markup=keyboard)
@@ -237,7 +233,7 @@ Click below to become the host 🏆"""
         }
         
         await callback.message.delete()
-        await client.send_message(chat_id, f"👑 [{user.first_name}](tg://user?id={user.id}) is now the game host! Use /create_team to start!")
+        await client.send_message(chat_id, f"👑 [{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏")
         await callback.answer()
 
     # ================= CREATE TEAM COMMAND =================
@@ -266,8 +262,6 @@ Click below to become the host 🏆"""
         
         await message.reply(
             f"🎉 Team creation is underway! Join Team A by sending /join_teamA 📣\n\n"
-            f"👥 Need {TEAM_SIZE} players for Team A\n"
-            f"⏰ You have 50 seconds to join Team A!"
         )
         
         asyncio.create_task(team_a_timer(client, chat_id))
