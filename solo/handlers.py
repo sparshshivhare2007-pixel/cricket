@@ -1,4 +1,4 @@
-# solo/handlers.py - Final Complete Working Version
+# solo/handlers.py - Final Complete Working Version (Solo + Team Mode)
 
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -11,6 +11,11 @@ import asyncio
 
 active_votes = {}
 bowling_tasks = {}
+
+# ================= TEAM MODE VARIABLES =================
+team_games = {}
+team_hosts = {}
+TEAM_SIZE = 11
 
 def get_run_video(runs):
     run_videos = {1: RUN_1_VIDEO, 2: RUN_2_VIDEO, 3: RUN_3_VIDEO, 4: RUN_4_VIDEO, 5: RUN_5_VIDEO, 6: RUN_6_VIDEO}
@@ -26,7 +31,6 @@ async def is_admin(client, chat_id, user_id):
 async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, message_id):
     """Send warnings and penalty if bowler doesn't respond"""
     
-    # 30 seconds warning
     await asyncio.sleep(30)
     game = games.get(chat_id)
     if game and game.get("status") == "playing":
@@ -40,7 +44,6 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
             except:
                 pass
     
-    # 10 seconds warning
     await asyncio.sleep(20)
     game = games.get(chat_id)
     if game and game.get("status") == "playing":
@@ -54,21 +57,18 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
             except:
                 pass
     
-    # Final 10 seconds
     await asyncio.sleep(10)
     game = games.get(chat_id)
     if game and game.get("status") == "playing":
         current_bowler = game.get("current_bowler", {})
         if current_bowler.get("id") == user_id and game.get("bowling_number") is None:
             
-            # Penalty: -6 runs to bowler's score
             for player in game["players"]:
                 if player["id"] == user_id:
                     player["score"] -= 6
                     player["history"].append("PENALTY(-6)")
                     break
             
-            # Send 6 run video with caption
             try:
                 await client.send_video(
                     chat_id,
@@ -82,27 +82,21 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
                     f"No message received from bowler, deducting 6 runs of bowler."
                 )
             
-            # Send scoreboard after penalty
             await client.send_message(chat_id, build_scoreboard(game["players"], is_final=False))
             
-            # Update game state - SAME BOWLER CONTINUES
             game["bowling_number"] = None
             game["current_bowler_balls"] += 1
             game["total_balls_in_match"] += 1
             
-            # Check if bowler completed his overs (3 balls)
             ball_mode = game.get("ball_mode", 3)
             if game["current_bowler_balls"] >= ball_mode:
-                # Change bowler only after completing all balls
                 new_bowler_index = (game["current_bowler_index"] + 1) % len(game["players"])
                 game["current_bowler_index"] = new_bowler_index
                 game["current_bowler"] = game["players"][new_bowler_index].copy()
                 game["current_bowler_balls"] = 0
             
-            # Send bowling video for next ball (same bowler or new)
             await send_bowling_video(client, chat_id, game["current_bowler"])
     
-    # Clean up
     if chat_id in bowling_tasks:
         del bowling_tasks[chat_id]
 
@@ -178,7 +172,6 @@ def register_handlers(app):
         if action == "team":
             await callback.message.delete()
             await callback.answer("Opening Team Mode...")
-            from team.handlers import team_mode_start
             await team_mode_start(client, callback)
             return
         
@@ -188,6 +181,218 @@ def register_handlers(app):
         
         if action == "solo":
             await ball_selection_menu(client, callback)
+
+    # ================= TEAM MODE START =================
+    async def team_mode_start(client, callback):
+        chat_id = callback.message.chat.id
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("👑 I'm the Host", callback_data="team_become_host")]
+        ])
+        
+        caption = """**🏏 TEAM MATCH**
+
+**⭐ New Game Alert! ⭐**
+
+Who will be the game host?
+
+Click below to become the host 🏆"""
+        
+        try:
+            await client.send_photo(chat_id, TEAM_PLAY_IMG, caption=caption, reply_markup=keyboard)
+        except:
+            await client.send_message(chat_id, caption, reply_markup=keyboard)
+        await callback.answer()
+
+    # ================= BECOME HOST =================
+    @app.on_callback_query(filters.regex("^team_become_host$"))
+    async def team_become_host(client, callback):
+        chat_id = callback.message.chat.id
+        user = callback.from_user
+        
+        if chat_id in team_hosts:
+            await callback.answer("Host already selected!", show_alert=True)
+            return
+        
+        team_hosts[chat_id] = {
+            "id": user.id,
+            "name": user.first_name,
+            "username": user.username
+        }
+        
+        team_games[chat_id] = {
+            "host_id": user.id,
+            "host_name": user.first_name,
+            "status": "waiting_host",
+            "team_a": [],
+            "team_b": [],
+            "team_a_score": 0,
+            "team_b_score": 0,
+            "team_a_wickets": 0,
+            "team_b_wickets": 0,
+            "current_team": None,
+            "target": None,
+            "game_over": False,
+            "winner": None
+        }
+        
+        await callback.message.delete()
+        await client.send_message(chat_id, f"👑 [{user.first_name}](tg://user?id={user.id}) is now the game host! Use /create_team to start!")
+        await callback.answer()
+
+    # ================= CREATE TEAM COMMAND =================
+    @app.on_message(filters.command("create_team") & filters.group)
+    async def create_team_cmd(client, message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        
+        print(f"🔴 CREATE TEAM - Chat: {chat_id}, User: {user_id}")
+        
+        host = team_hosts.get(chat_id)
+        if not host:
+            await message.reply("❌ No game host found! Start team mode first.")
+            return
+        
+        if host["id"] != user_id:
+            await message.reply("❌ Only the game host can create teams!")
+            return
+        
+        game = team_games.get(chat_id)
+        if not game or game["status"] != "waiting_host":
+            await message.reply("❌ Teams already created!")
+            return
+        
+        game["status"] = "team_creation_a"
+        
+        await message.reply(
+            f"🎉 Team creation is underway! Join Team A by sending /join_teamA 📣\n\n"
+            f"👥 Need {TEAM_SIZE} players for Team A\n"
+            f"⏰ You have 50 seconds to join Team A!"
+        )
+        
+        asyncio.create_task(team_a_timer(client, chat_id))
+
+    # ================= JOIN TEAM A =================
+    @app.on_message(filters.command("join_teamA") & filters.group)
+    async def join_team_a_cmd(client, message):
+        chat_id = message.chat.id
+        user = message.from_user
+        game = team_games.get(chat_id)
+        
+        if not game or game["status"] != "team_creation_a":
+            await message.reply("❌ Team A is not open for joining!")
+            return
+        
+        if len(game["team_a"]) >= TEAM_SIZE:
+            await message.reply(f"❌ Team A is full! ({TEAM_SIZE}/{TEAM_SIZE} players)")
+            return
+        
+        game["team_a"].append({
+            "id": user.id, "name": user.first_name, "username": user.username,
+            "score": 0, "balls": 0, "fours": 0, "sixes": 0, "out": False, "history": []
+        })
+        
+        current = len(game["team_a"])
+        await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team A! ({current}/{TEAM_SIZE} players)")
+
+    # ================= TEAM A TIMER =================
+    async def team_a_timer(client, chat_id):
+        await asyncio.sleep(50)
+        game = team_games.get(chat_id)
+        if game and game["status"] == "team_creation_a":
+            game["status"] = "team_creation_b"
+            await client.send_message(chat_id, f"⏰ Time's up for Team A!\n\n🎉 Join Team B by sending /join_teamB 📣")
+
+    # ================= JOIN TEAM B =================
+    @app.on_message(filters.command("join_teamB") & filters.group)
+    async def join_team_b_cmd(client, message):
+        chat_id = message.chat.id
+        user = message.from_user
+        game = team_games.get(chat_id)
+        
+        if not game or game["status"] != "team_creation_b":
+            await message.reply("❌ Team B is not open for joining!")
+            return
+        
+        if len(game["team_b"]) >= TEAM_SIZE:
+            await message.reply(f"❌ Team B is full! ({TEAM_SIZE}/{TEAM_SIZE} players)")
+            return
+        
+        game["team_b"].append({
+            "id": user.id, "name": user.first_name, "username": user.username,
+            "score": 0, "balls": 0, "fours": 0, "sixes": 0, "out": False, "history": []
+        })
+        
+        current = len(game["team_b"])
+        await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team B! ({current}/{TEAM_SIZE} players)")
+
+    # ================= TEAM B TIMER =================
+    async def team_b_timer(client, chat_id):
+        await asyncio.sleep(50)
+        game = team_games.get(chat_id)
+        if game and game["status"] == "team_creation_b":
+            game["status"] = "ready"
+            await client.send_message(
+                chat_id,
+                f"✅ Teams are complete!\n\n"
+                f"🏏 Team A: {len(game['team_a'])} players\n"
+                f"🏏 Team B: {len(game['team_b'])} players\n\n"
+                f"🎯 Type /start_match to begin the match!"
+            )
+
+    # ================= START MATCH =================
+    @app.on_message(filters.command("start_match") & filters.group)
+    async def start_match_cmd(client, message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        
+        host = team_hosts.get(chat_id)
+        if not host or host["id"] != user_id:
+            await message.reply("❌ Only host can start the match!")
+            return
+        
+        game = team_games.get(chat_id)
+        if not game or game["status"] != "ready":
+            await message.reply("❌ Teams not ready! Need 11 players each.")
+            return
+        
+        await message.reply("🚀 Match is starting...\n\n🏏 Team A will bat first!")
+        
+        # Start Team A batting
+        await start_team_batting(client, chat_id, "A")
+
+    # ================= TEAM BATTING =================
+    async def start_team_batting(client, chat_id, team):
+        game = team_games.get(chat_id)
+        if not game:
+            return
+        
+        team_key = f"team_{team.lower()}"
+        players = game[team_key]
+        
+        # Reset players for batting
+        for p in players:
+            p["score"] = 0
+            p["balls"] = 0
+            p["fours"] = 0
+            p["sixes"] = 0
+            p["out"] = False
+            p["history"] = []
+        
+        game["current_team"] = team
+        game["current_batter_index"] = 0
+        game["current_batter"] = players[0].copy()
+        game["current_bowler_index"] = 1 if len(players) > 1 else 0
+        game["current_bowler"] = players[game["current_bowler_index"]].copy()
+        game["current_bowler_balls"] = 0
+        game["bowling_number"] = None
+        game["team_total"] = 0
+        game["team_wickets"] = 0
+        game["status"] = "playing"
+        
+        await client.send_message(chat_id, f"🏏 **Team {team} Batting**\n\nBatter: [{game['current_batter']['name']}](tg://user?id={game['current_batter']['id']})\nBowler: [{game['current_bowler']['name']}](tg://user?id={game['current_bowler']['id']})")
+        
+        await send_bowling_video(client, chat_id, game["current_bowler"])
 
     # ================= BALL SELECTION MENU =================
     async def ball_selection_menu(client, callback):
@@ -444,7 +649,6 @@ Voters:
             reply_markup=keyboard
         )
         
-        # Start timeout task with warnings
         if chat_id in bowling_tasks:
             try:
                 bowling_tasks[chat_id].cancel()
@@ -477,7 +681,6 @@ Voters:
                 await message.reply("❌ You already bowled! Wait for your next turn.")
                 return
             
-            # Cancel timeout task
             if chat_id in bowling_tasks:
                 bowling_tasks[chat_id].cancel()
                 del bowling_tasks[chat_id]
@@ -518,7 +721,6 @@ Voters:
         if not text.isdigit() or int(text) not in range(1, 7):
             return await message.reply(INVALID_NUMBER)
         
-        # Add thumbs up reaction
         try:
             await client.send_reaction(message.chat.id, message.id, "👍")
         except:
@@ -551,8 +753,6 @@ Voters:
             
             new_batter = game["current_batter"]
             await client.send_message(chat_id, f"Hey [{new_batter['name']}](tg://user?id={new_batter['id']}), now you're batter!")
-            
-            # Add "Get ready for the next ball" message
             await client.send_message(chat_id, f"New batsman: [{new_batter['name']}](tg://user?id={new_batter['id']})\n\nGet ready for the next ball ⚾")
             
             if not game.get("game_over"):
