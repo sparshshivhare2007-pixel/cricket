@@ -626,7 +626,7 @@ Who will be the game host for this match? 🤔"""
             reply_markup=keyboard
         )
 
-    # ================= END MATCH CONFIRM =================
+       # ================= END MATCH CONFIRM =================
     @app.on_callback_query(filters.regex("^end_match_confirm$"))
     async def end_match_confirm_callback(client, callback):
         chat_id = callback.message.chat.id
@@ -640,6 +640,11 @@ Who will be the game host for this match? 🤔"""
         game = team_games.get(chat_id)
         if not game:
             await callback.answer("❌ No active game found!", show_alert=True)
+            return
+        
+        # Check if match was actually started
+        if game.get("match_start_time") is None:
+            await callback.answer("❌ Match hasn't started yet! Use /start_match first.", show_alert=True)
             return
         
         game["match_end_time"] = datetime.now()
@@ -656,13 +661,17 @@ Who will be the game host for this match? 🤔"""
             winner = "Match Tied"
             win_margin = "0 runs"
         
-        # Create match report
+        # Create match report with safe date handling
+        start_time = game['match_start_time']
+        date_str = start_time.strftime('%Y-%m-%d') if start_time else "Not recorded"
+        time_str = start_time.strftime('%H:%M:%S') if start_time else "Not recorded"
+        
         match_report = f"""═══════════════════════════════
          🏏 MATCH REPORT 🏏
 ═══════════════════════════════
 
-📅 Date: {game['match_start_time'].strftime('%Y-%m-%d')}
-⏰ Time: {game['match_start_time'].strftime('%H:%M:%S')}
+📅 Date: {date_str}
+⏰ Time: {time_str}
 👑 Host: {game['host_name']}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -725,7 +734,6 @@ Who will be the game host for this match? 🤔"""
             del team_hosts[chat_id]
         
         await callback.answer("✅ Match ended!")
-
     # ================= END MATCH CANCEL =================
     @app.on_callback_query(filters.regex("^end_match_cancel$"))
     async def end_match_cancel_callback(client, callback):
