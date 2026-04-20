@@ -630,7 +630,7 @@ Who will be the game host for this match? 🤔"""
             reply_markup=keyboard
         )
 
-            # ================= END MATCH CONFIRM =================
+                # ================= END MATCH CONFIRM =================
     @app.on_callback_query(filters.regex("^end_match_confirm$"))
     async def end_match_confirm_callback(client, callback):
         chat_id = callback.message.chat.id
@@ -702,7 +702,7 @@ Who will be the game host for this match? 🤔"""
       Match Cancelled!
 ═══════════════════════════════"""
             
-            await callback.message.edit_text("🏏 Match ended successfully!")
+            await callback.message.edit_text("🏏 Match cancelled successfully!")
             
         else:
             # Match started - full report with scores
@@ -775,9 +775,9 @@ Who will be the game host for this match? 🤔"""
             
             await callback.message.edit_text("🏏 Match ended successfully!")
         
-        # Send report as text file
+        # Send report as text file - ALWAYS "res.txt"
         report_bytes = io.BytesIO(match_report.encode('utf-8'))
-        report_bytes.name = f"match_report_{chat_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        report_bytes.name = "res.txt"
         
         await client.send_document(
             chat_id,
