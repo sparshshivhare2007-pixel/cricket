@@ -15,7 +15,6 @@ bowling_tasks = {}
 # ================= TEAM MODE VARIABLES =================
 team_games = {}
 team_hosts = {}
-TEAM_SIZE = 11
 
 def get_run_video(runs):
     run_videos = {1: RUN_1_VIDEO, 2: RUN_2_VIDEO, 3: RUN_3_VIDEO, 4: RUN_4_VIDEO, 5: RUN_5_VIDEO, 6: RUN_6_VIDEO}
@@ -278,7 +277,6 @@ Who will be the game host for this match? 🤔"""
             await message.reply("❌ Team A is not open for joining!")
             return
         
-        # Host cannot join
         if host and host["id"] == user.id:
             await message.reply("❌ You are the host! Host cannot join any team.")
             return
@@ -319,7 +317,6 @@ Who will be the game host for this match? 🤔"""
             await message.reply("❌ Team B is not open for joining!")
             return
         
-        # Host cannot join
         if host and host["id"] == user.id:
             await message.reply("❌ You are the host! Host cannot join any team.")
             return
@@ -449,6 +446,113 @@ Who will be the game host for this match? 🤔"""
         current = len(game["team_b"])
         username_display = f"@{added_user.username}" if added_user.username else added_user.first_name
         await message.reply(f"added {username_display} to Team B! ({current} players)")
+
+    # ================= SHIFT TEAM (HOST ONLY) =================
+    @app.on_message(filters.command("shift_Team") & filters.group)
+    async def shift_team_cmd(client, message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        
+        host = team_hosts.get(chat_id)
+        if not host or host["id"] != user_id:
+            await message.reply("❌ Only host can shift players between teams!")
+            return
+        
+        game = team_games.get(chat_id)
+        if not game or game["status"] not in ["team_creation_a", "team_creation_b", "ready"]:
+            await message.reply("❌ Cannot shift players now!")
+            return
+        
+        if len(message.command) < 2:
+            await message.reply("❌ Usage: /shift_Team <player_number>\nExample: /shift_Team 2")
+            return
+        
+        try:
+            player_num = int(message.command[1]) - 1
+        except:
+            await message.reply("❌ Please provide a valid player number!")
+            return
+        
+        # Check in Team A
+        if player_num < len(game["team_a"]):
+            player = game["team_a"][player_num]
+            current_team = "A"
+            target_team = "B"
+        # Check in Team B
+        elif (player_num - len(game["team_a"])) < len(game["team_b"]):
+            player_num_b = player_num - len(game["team_a"])
+            player = game["team_b"][player_num_b]
+            current_team = "B"
+            target_team = "A"
+        else:
+            await message.reply(f"❌ Player number {player_num + 1} not found in any team!")
+            return
+        
+        username_display = f"@{player['username']}" if player['username'] else player['name']
+        
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(f"✅ Confirm shift to Team {target_team}", callback_data=f"shift_confirm_{player_num}_{current_team}_{target_team}"),
+                InlineKeyboardButton("❌ Cancel", callback_data="shift_cancel")
+            ]
+        ])
+        
+        await message.reply(
+            f"{username_display} is currently in Team {current_team}.\n"
+            f"Do you want to shift them to Team {target_team}?",
+            reply_markup=keyboard
+        )
+
+    # ================= SHIFT CONFIRM CALLBACK =================
+    @app.on_callback_query(filters.regex("^shift_confirm_"))
+    async def shift_confirm_callback(client, callback):
+        chat_id = callback.message.chat.id
+        user_id = callback.from_user.id
+        
+        host = team_hosts.get(chat_id)
+        if not host or host["id"] != user_id:
+            await callback.answer("❌ Only host can confirm shift!", show_alert=True)
+            return
+        
+        game = team_games.get(chat_id)
+        if not game:
+            await callback.answer("❌ Game not found!", show_alert=True)
+            return
+        
+        data = callback.data.split("_")
+        player_num = int(data[2])
+        current_team = data[3]
+        target_team = data[4]
+        
+        if current_team == "A":
+            if player_num >= len(game["team_a"]):
+                await callback.answer("❌ Player not found in Team A!", show_alert=True)
+                return
+            player = game["team_a"].pop(player_num)
+            game["team_b"].append(player)
+        else:
+            player_num_b = player_num - len(game["team_a"])
+            if player_num_b >= len(game["team_b"]):
+                await callback.answer("❌ Player not found in Team B!", show_alert=True)
+                return
+            player = game["team_b"].pop(player_num_b)
+            game["team_a"].append(player)
+        
+        username_display = f"@{player['username']}" if player['username'] else player['name']
+        
+        await callback.message.delete()
+        await callback.message.reply(
+            f"🔄 {username_display} shifted from Team {current_team} to Team {target_team}!\n\n"
+            f"🏏 Team A: {len(game['team_a'])} players\n"
+            f"🏏 Team B: {len(game['team_b'])} players"
+        )
+        await callback.answer("✅ Player shifted successfully!")
+
+    # ================= SHIFT CANCEL CALLBACK =================
+    @app.on_callback_query(filters.regex("^shift_cancel$"))
+    async def shift_cancel_callback(client, callback):
+        await callback.message.delete()
+        await callback.answer("❌ Shift cancelled!")
 
     # ================= START MATCH =================
     @app.on_message(filters.command("start_match") & filters.group)
