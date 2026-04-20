@@ -630,7 +630,7 @@ Who will be the game host for this match? 🤔"""
             reply_markup=keyboard
         )
 
-    # ================= END MATCH CONFIRM =================
+        # ================= END MATCH CONFIRM =================
     @app.on_callback_query(filters.regex("^end_match_confirm$"))
     async def end_match_confirm_callback(client, callback):
         chat_id = callback.message.chat.id
@@ -650,9 +650,16 @@ Who will be the game host for this match? 🤔"""
             await callback.answer("❌ No active game found!", show_alert=True)
             return
         
-        # Check if match was actually started
+        # If match hasn't started, just clean up without report
         if game.get("match_start_time") is None:
-            await callback.answer("❌ Match hasn't started yet! Use /start_match first.", show_alert=True)
+            # Clean up
+            if chat_id in team_games:
+                del team_games[chat_id]
+            if chat_id in team_hosts:
+                del team_hosts[chat_id]
+            
+            await callback.message.edit_text("🏏 Match cancelled successfully!")
+            await callback.answer("✅ Match cancelled!")
             return
         
         game["match_end_time"] = datetime.now()
@@ -742,7 +749,7 @@ Who will be the game host for this match? 🤔"""
             del team_hosts[chat_id]
         
         await callback.answer("✅ Match ended!")
-
+        
     # ================= END MATCH CANCEL =================
     @app.on_callback_query(filters.regex("^end_match_cancel$"))
     async def end_match_cancel_callback(client, callback):
