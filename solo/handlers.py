@@ -18,6 +18,10 @@ bowling_tasks = {}
 team_games = {}
 team_hosts = {}
 
+# ================= AUCTION MODE VARIABLES =================
+auction_games = {}
+auction_hosts = {}
+
 def get_run_video(runs):
     run_videos = {1: RUN_1_VIDEO, 2: RUN_2_VIDEO, 3: RUN_3_VIDEO, 4: RUN_4_VIDEO, 5: RUN_5_VIDEO, 6: RUN_6_VIDEO}
     return run_videos.get(runs, RUN_1_VIDEO)
@@ -101,6 +105,120 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
     if chat_id in bowling_tasks:
         del bowling_tasks[chat_id]
 
+# ================= AUCTION MODE FUNCTIONS =================
+async def auction_mode_start(client, callback):
+    chat_id = callback.message.chat.id
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("👑 I'm the Host", callback_data="auction_become_host")]
+    ])
+    
+    caption = """**🏏 SOLO TREE COMMUNITY**
+
+**💰 CRICKET GAME**  
+**TELEGRAM CRICKET GAME BOT**
+
+**Powered by PCG**
+
+**✨ New Auction Alert! ✨**
+
+Who will be the host for this Auction? 😊
+
+Click below to become the host 👇"""
+    
+    try:
+        await client.send_photo(
+            chat_id,
+            AUCTION_PLAY_IMG,
+            caption=caption,
+            reply_markup=keyboard
+        )
+    except:
+        await client.send_message(
+            chat_id,
+            caption,
+            reply_markup=keyboard
+        )
+    await callback.answer()
+
+async def auction_become_host(client, callback):
+    chat_id = callback.message.chat.id
+    user = callback.from_user
+    
+    # Check if there's an existing auction
+    existing_auction = auction_games.get(chat_id)
+    if existing_auction and existing_auction.get("status") == "active":
+        await callback.answer("❌ An auction is currently in progress! Cannot change host.", show_alert=True)
+        return
+    
+    # Clear any existing data
+    if chat_id in auction_games:
+        del auction_games[chat_id]
+    if chat_id in auction_hosts:
+        del auction_hosts[chat_id]
+    
+    auction_hosts[chat_id] = {
+        "id": user.id,
+        "name": user.first_name,
+        "username": user.username
+    }
+    
+    auction_games[chat_id] = {
+        "host_id": user.id,
+        "host_name": user.first_name,
+        "status": "waiting_host",
+        "players": [],
+        "sold_players": [],
+        "budget": 100,
+        "current_player": None,
+        "current_bid": 0,
+        "current_bidder": None
+    }
+    
+    await callback.message.delete()
+    
+    # Send host confirmation with image
+    try:
+        await client.send_photo(
+            chat_id,
+            AUCTION_HOST_IMG,
+            caption=f"👑 [{user.first_name}](tg://user?id={user.id}) is now the auction host! Auction host can now use /create_auction. Let's get the Auction started! 🏷️",
+            disable_web_page_preview=True
+        )
+    except:
+        await client.send_message(
+            chat_id,
+            f"👑 [{user.first_name}](tg://user?id={user.id}) is now the auction host! Auction host can now use /create_auction. Let's get the Auction started! 🏷️"
+        )
+    await callback.answer()
+
+async def create_auction_cmd(client, message):
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    
+    print(f"🔴 CREATE AUCTION - Chat: {chat_id}, User: {user_id}")
+    
+    host = auction_hosts.get(chat_id)
+    if not host:
+        await message.reply("❌ No auction host found! Start auction mode first.")
+        return
+    
+    if host["id"] != user_id:
+        await message.reply("❌ Only the auction host can create auction!")
+        return
+    
+    game = auction_games.get(chat_id)
+    if not game or game["status"] != "waiting_host":
+        await message.reply("❌ Auction already created or in progress!")
+        return
+    
+    game["status"] = "active"
+    
+    await message.reply(
+        f"🎉 Auction is now live! Join the auction by sending /join_auction 📣\n\n"
+        f"👥 Players can join the auction!"
+    )
+
 def register_handlers(app):
 
     # ================= START GROUP =================
@@ -176,7 +294,13 @@ def register_handlers(app):
             await team_mode_start(client, callback)
             return
         
-        if action in ["auction", "tournament"]:
+        if action == "auction":
+            await callback.message.delete()
+            await callback.answer("Opening Auction Mode...")
+            await auction_mode_start(client, callback)
+            return
+        
+        if action in ["tournament"]:
             await callback.answer(f"{action} mode coming soon!", show_alert=True)
             return
         
@@ -630,7 +754,7 @@ Who will be the game host for this match? 🤔"""
             reply_markup=keyboard
         )
 
-                # ================= END MATCH CONFIRM =================
+    # ================= END MATCH CONFIRM =================
     @app.on_callback_query(filters.regex("^end_match_confirm$"))
     async def end_match_confirm_callback(client, callback):
         chat_id = callback.message.chat.id
@@ -792,7 +916,7 @@ Who will be the game host for this match? 🤔"""
             del team_hosts[chat_id]
         
         await callback.answer("✅ Match ended!")
-        
+
     # ================= END MATCH CANCEL =================
     @app.on_callback_query(filters.regex("^end_match_cancel$"))
     async def end_match_cancel_callback(client, callback):
@@ -1224,3 +1348,12 @@ Voters:
                     await send_bowling_video(client, chat_id, new_bowler)
                 else:
                     await send_bowling_video(client, chat_id, bowler)
+
+    # ================= AUCTION CALLBACKS =================
+    @app.on_callback_query(filters.regex("^auction_become_host$"))
+    async def auction_become_host_callback(client, callback):
+        await auction_become_host(client, callback)
+
+    @app.on_message(filters.command("create_auction") & filters.group)
+    async def create_auction_cmd_handler(client, message):
+        await create_auction_cmd(client, message)
