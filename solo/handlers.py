@@ -8,6 +8,8 @@ from solo.game import *
 from solo.scoreboard import build_scoreboard
 from solo.score import get_live_score
 import asyncio
+from datetime import datetime
+import io
 
 active_votes = {}
 bowling_tasks = {}
@@ -228,7 +230,12 @@ Who will be the game host for this match? 🤔"""
             "current_team": None,
             "target": None,
             "game_over": False,
-            "winner": None
+            "winner": None,
+            "match_start_time": None,
+            "match_end_time": None,
+            "total_balls": 0,
+            "team_a_name": "Team A",
+            "team_b_name": "Team B"
         }
         
         await callback.message.delete()
@@ -295,7 +302,7 @@ Who will be the game host for this match? 🤔"""
         })
         
         current = len(game["team_a"])
-        await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team A! ({current} players)")
+        await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team A!")
 
     # ================= TEAM A TIMER =================
     async def team_a_timer(client, chat_id):
@@ -335,7 +342,7 @@ Who will be the game host for this match? 🤔"""
         })
         
         current = len(game["team_b"])
-        await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team B! ({current} players)")
+        await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team B!")
 
     # ================= TEAM B TIMER =================
     async def team_b_timer(client, chat_id):
@@ -463,42 +470,43 @@ Who will be the game host for this match? 🤔"""
             await message.reply("❌ Cannot shift players now!")
             return
         
-        if len(message.command) < 2:
-            await message.reply("❌ Usage: /shift_Team <player_number>\nExample: /shift_Team 2")
+        if not message.reply_to_message:
+            await message.reply("❌ Please reply to a user's message to shift them!")
             return
         
-        try:
-            player_num = int(message.command[1]) - 1
-        except:
-            await message.reply("❌ Please provide a valid player number!")
-            return
+        user_to_shift = message.reply_to_message.from_user
+        username_display = f"@{user_to_shift.username}" if user_to_shift.username else user_to_shift.first_name
         
-        # Check in Team A
-        if player_num < len(game["team_a"]):
-            player = game["team_a"][player_num]
-            current_team = "A"
-            target_team = "B"
-        # Check in Team B
-        elif (player_num - len(game["team_a"])) < len(game["team_b"]):
-            player_num_b = player_num - len(game["team_a"])
-            player = game["team_b"][player_num_b]
+        in_team_a = False
+        for p in game["team_a"]:
+            if p["id"] == user_to_shift.id:
+                in_team_a = True
+                break
+        
+        if not in_team_a:
+            in_team_b = False
+            for p in game["team_b"]:
+                if p["id"] == user_to_shift.id:
+                    in_team_b = True
+                    break
+            if not in_team_b:
+                await message.reply(f"❌ {username_display} is not in any team!")
+                return
             current_team = "B"
             target_team = "A"
         else:
-            await message.reply(f"❌ Player number {player_num + 1} not found in any team!")
-            return
-        
-        username_display = f"@{player['username']}" if player['username'] else player['name']
+            current_team = "A"
+            target_team = "B"
         
         keyboard = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton(f"✅ Confirm shift to Team {target_team}", callback_data=f"shift_confirm_{player_num}_{current_team}_{target_team}"),
-                InlineKeyboardButton("❌ Cancel", callback_data="shift_cancel")
+                InlineKeyboardButton(f"Confirm shift to Team {target_team}", callback_data=f"shift_confirm_{user_to_shift.id}_{current_team}_{target_team}"),
+                InlineKeyboardButton("Cancel", callback_data="shift_cancel")
             ]
         ])
         
         await message.reply(
-            f"{username_display} is currently in Team {current_team}.\n"
+            f"🔄 {username_display} is currently in Team {current_team}.\n"
             f"Do you want to shift them to Team {target_team}?",
             reply_markup=keyboard
         )
@@ -520,23 +528,27 @@ Who will be the game host for this match? 🤔"""
             return
         
         data = callback.data.split("_")
-        player_num = int(data[2])
+        user_to_shift_id = int(data[2])
         current_team = data[3]
         target_team = data[4]
         
+        player = None
         if current_team == "A":
-            if player_num >= len(game["team_a"]):
-                await callback.answer("❌ Player not found in Team A!", show_alert=True)
-                return
-            player = game["team_a"].pop(player_num)
-            game["team_b"].append(player)
+            for i, p in enumerate(game["team_a"]):
+                if p["id"] == user_to_shift_id:
+                    player = game["team_a"].pop(i)
+                    game["team_b"].append(player)
+                    break
         else:
-            player_num_b = player_num - len(game["team_a"])
-            if player_num_b >= len(game["team_b"]):
-                await callback.answer("❌ Player not found in Team B!", show_alert=True)
-                return
-            player = game["team_b"].pop(player_num_b)
-            game["team_a"].append(player)
+            for i, p in enumerate(game["team_b"]):
+                if p["id"] == user_to_shift_id:
+                    player = game["team_b"].pop(i)
+                    game["team_a"].append(player)
+                    break
+        
+        if not player:
+            await callback.answer("❌ Player not found!", show_alert=True)
+            return
         
         username_display = f"@{player['username']}" if player['username'] else player['name']
         
@@ -570,9 +582,146 @@ Who will be the game host for this match? 🤔"""
             await message.reply("❌ Teams not ready!")
             return
         
+        game["match_start_time"] = datetime.now()
+        game["status"] = "playing"
+        
         await message.reply("🚀 Match is starting...\n\n🏏 Team A will bat first!")
         
         await start_team_batting(client, chat_id, "A")
+
+    # ================= END MATCH COMMAND =================
+    @app.on_message(filters.command("end_match") & filters.group)
+    async def end_match_cmd(client, message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        
+        host = team_hosts.get(chat_id)
+        if not host or host["id"] != user_id:
+            await message.reply("❌ Only host can end the match!")
+            return
+        
+        game = team_games.get(chat_id)
+        if not game:
+            await message.reply("❌ No active game found!")
+            return
+        
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ Confirm", callback_data=f"end_match_confirm"),
+                InlineKeyboardButton("❌ Cancel", callback_data="end_match_cancel")
+            ]
+        ])
+        
+        await message.reply(
+            "⚠️ Are you sure you want to end the match?",
+            reply_markup=keyboard
+        )
+
+    # ================= END MATCH CONFIRM =================
+    @app.on_callback_query(filters.regex("^end_match_confirm$"))
+    async def end_match_confirm_callback(client, callback):
+        chat_id = callback.message.chat.id
+        user_id = callback.from_user.id
+        
+        host = team_hosts.get(chat_id)
+        if not host or host["id"] != user_id:
+            await callback.answer("❌ Only host can end the match!", show_alert=True)
+            return
+        
+        game = team_games.get(chat_id)
+        if not game:
+            await callback.answer("❌ No active game found!", show_alert=True)
+            return
+        
+        game["match_end_time"] = datetime.now()
+        game["game_over"] = True
+        
+        # Calculate winner
+        if game["team_a_score"] > game["team_b_score"]:
+            winner = "Team A"
+            win_margin = f"{game['team_a_score'] - game['team_b_score']} runs"
+        elif game["team_b_score"] > game["team_a_score"]:
+            winner = "Team B"
+            win_margin = f"{game['team_b_score'] - game['team_a_score']} runs"
+        else:
+            winner = "Match Tied"
+            win_margin = "0 runs"
+        
+        # Create match report
+        match_report = f"""═══════════════════════════════
+         🏏 MATCH REPORT 🏏
+═══════════════════════════════
+
+📅 Date: {game['match_start_time'].strftime('%Y-%m-%d')}
+⏰ Time: {game['match_start_time'].strftime('%H:%M:%S')}
+👑 Host: {game['host_name']}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          📊 FINAL SCORE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏏 TEAM A: {game['team_a_score']}/{game['team_a_wickets']}
+🏏 TEAM B: {game['team_b_score']}/{game['team_b_wickets']}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          🏆 WINNER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   🎉 {winner} ({win_margin}) 🎉
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         👥 TEAM A PLAYERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+
+        for p in game["team_a"]:
+            status = "❌" if p.get("out", False) else "🏏"
+            match_report += f"\n   {status} {p['name']} - {p.get('score', 0)} runs ({p.get('balls', 0)} balls)"
+            if p.get('fours', 0) > 0 or p.get('sixes', 0) > 0:
+                match_report += f" (4s: {p.get('fours', 0)}, 6s: {p.get('sixes', 0)})"
+
+        match_report += f"""
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         👥 TEAM B PLAYERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+
+        for p in game["team_b"]:
+            status = "❌" if p.get("out", False) else "🏏"
+            match_report += f"\n   {status} {p['name']} - {p.get('score', 0)} runs ({p.get('balls', 0)} balls)"
+            if p.get('fours', 0) > 0 or p.get('sixes', 0) > 0:
+                match_report += f" (4s: {p.get('fours', 0)}, 6s: {p.get('sixes', 0)})"
+
+        match_report += """
+
+═══════════════════════════════
+      Match Ended Successfully!
+═══════════════════════════════"""
+        
+        await callback.message.edit_text("🏏 Match ended successfully!")
+        
+        # Send report as text file
+        report_bytes = io.BytesIO(match_report.encode('utf-8'))
+        report_bytes.name = f"match_report_{chat_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        
+        await client.send_document(
+            chat_id,
+            report_bytes,
+            caption="📄 Game data saved before ending the match."
+        )
+        
+        # Clean up
+        if chat_id in team_games:
+            del team_games[chat_id]
+        if chat_id in team_hosts:
+            del team_hosts[chat_id]
+        
+        await callback.answer("✅ Match ended!")
+
+    # ================= END MATCH CANCEL =================
+    @app.on_callback_query(filters.regex("^end_match_cancel$"))
+    async def end_match_cancel_callback(client, callback):
+        await callback.message.delete()
+        await callback.answer("❌ Match end cancelled!")
 
     # ================= TEAM BATTING =================
     async def start_team_batting(client, chat_id, team):
