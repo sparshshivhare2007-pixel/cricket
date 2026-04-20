@@ -113,18 +113,9 @@ async def auction_mode_start(client, callback):
         [InlineKeyboardButton("👑 I'm the Host", callback_data="auction_become_host")]
     ])
     
-    caption = """**🏏 SOLO TREE COMMUNITY**
+    caption = """🎉 New Auction Alert! 🎉 
 
-**💰 CRICKET GAME**  
-**TELEGRAM CRICKET GAME BOT**
-
-**Powered by PCG**
-
-**✨ New Auction Alert! ✨**
-
-Who will be the host for this Auction? 😊
-
-Click below to become the host 👇"""
+Who will be the host for this Auction? 🤔"""
     
     try:
         await client.send_photo(
