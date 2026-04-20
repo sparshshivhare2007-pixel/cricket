@@ -208,285 +208,6 @@ async def create_auction_cmd(client, message):
         f"👥 Players can join the auction!"
     )
 
-# ================= END AUCTION COMMAND =================
-@app.on_message(filters.command("end_auction") & filters.group)
-async def end_auction_cmd(client, message):
-    chat_id = message.chat.id
-    user_id = message.from_user.id
-    
-    host = auction_hosts.get(chat_id)
-    is_host = host and host["id"] == user_id
-    is_group_admin = await is_admin(client, chat_id, user_id)
-    
-    if not (is_host or is_group_admin):
-        await message.reply("❌ Only auction host or group admin can end the auction!")
-        return
-    
-    game = auction_games.get(chat_id)
-    if not game or game.get("status") != "active":
-        await message.reply("❌ No active auction found!")
-        return
-    
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✅ Confirm", callback_data="end_auction_confirm"),
-            InlineKeyboardButton("❌ Cancel", callback_data="end_auction_cancel")
-        ]
-    ])
-    
-    await message.reply(
-        "⚠️ Are you sure you want to end the auction? This will generate the final team report.",
-        reply_markup=keyboard
-    )
-
-# ================= END AUCTION CONFIRM =================
-@app.on_callback_query(filters.regex("^end_auction_confirm$"))
-async def end_auction_confirm_callback(client, callback):
-    chat_id = callback.message.chat.id
-    user_id = callback.from_user.id
-    
-    host = auction_hosts.get(chat_id)
-    is_host = host and host["id"] == user_id
-    is_group_admin = await is_admin(client, chat_id, user_id)
-    
-    if not (is_host or is_group_admin):
-        await callback.answer("❌ Only auction host or group admin can end the auction!", show_alert=True)
-        return
-    
-    game = auction_games.get(chat_id)
-    if not game:
-        await callback.answer("❌ No active auction found!", show_alert=True)
-        return
-    
-    current_time = datetime.now()
-    
-    # Prepare JSON data
-    auction_data = {
-        "_id": f"auction_{chat_id}_{int(current_time.timestamp())}",
-        "game_id": chat_id,
-        "game_mode": "auction",
-        "auction_host": game.get("host_id"),
-        "joined_captains": [p.get("id") for p in game.get("players", [])],
-        "captains": {},
-        "players_pool": {},
-        "current_player": None,
-        "starting_price": 0,
-        "current_bid": 0,
-        "current_bidder": None,
-        "auction_state": "ended",
-        "max_credits": game.get("budget", 120),
-        "end_time": current_time.strftime('%Y-%m-%d %H:%M:%S')
-    }
-    
-    # Add sold players
-    sold_players = game.get("sold_players", [])
-    for player in sold_players:
-        captain_id = player.get("captain_id", 0)
-        if captain_id not in auction_data["captains"]:
-            auction_data["captains"][captain_id] = []
-        auction_data["captains"][captain_id].append({
-            "name": player.get("name"),
-            "id": player.get("id"),
-            "bid": player.get("bid", 0)
-        })
-    
-    # JSON file
-    json_bytes = io.BytesIO(json.dumps(auction_data, indent=4).encode('utf-8'))
-    json_bytes.name = "auction_data.json"
-    
-    await callback.message.edit_text("📄 Auction data saved before ending")
-    
-    await client.send_document(
-        chat_id,
-        json_bytes,
-        caption="📄 Auction data saved before ending"
-    )
-    
-    # Create PDF report
-    pdf_bytes = io.BytesIO()
-    
-    try:
-        from reportlab.lib.pagesizes import letter
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib import colors
-        from reportlab.lib.units import inch
-        
-        doc = SimpleDocTemplate(pdf_bytes, pagesize=letter)
-        styles = getSampleStyleSheet()
-        story = []
-        
-        # Title
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=22,
-            textColor=colors.HexColor('#1a5f7a'),
-            alignment=1,
-            spaceAfter=20
-        )
-        story.append(Paragraph("CRICKET AUCTION RESULTS", title_style))
-        story.append(Spacer(1, 10))
-        
-        # Subtitle
-        subtitle_style = ParagraphStyle(
-            'Subtitle',
-            parent=styles['Heading2'],
-            fontSize=14,
-            textColor=colors.HexColor('#2c3e50'),
-            alignment=1,
-            spaceAfter=15
-        )
-        story.append(Paragraph("Team & Player Distribution with Bid Amounts", subtitle_style))
-        story.append(Spacer(1, 10))
-        
-        # Host info
-        host_name = game.get('host_name', 'Unknown')
-        host_id = game.get('host_id', 0)
-        date_str = current_time.strftime('%B %d, %Y at %H:%M')
-        
-        host_style = ParagraphStyle(
-            'HostStyle',
-            parent=styles['Normal'],
-            fontSize=11,
-            textColor=colors.HexColor('#555'),
-            alignment=1,
-            spaceAfter=20
-        )
-        story.append(Paragraph(f"Host: {host_name} | Date: {date_str}", host_style))
-        story.append(Spacer(1, 15))
-        
-        # Team Distribution heading
-        team_heading_style = ParagraphStyle(
-            'TeamHeading',
-            parent=styles['Heading3'],
-            fontSize=16,
-            textColor=colors.HexColor('#e67e22'),
-            alignment=0,
-            spaceAfter=10
-        )
-        story.append(Paragraph("TEAM DISTRIBUTION", team_heading_style))
-        story.append(Spacer(1, 10))
-        
-        # Create team distribution table
-        players = game.get("players", [])
-        sold_players_list = game.get("sold_players", [])
-        
-        # Group sold players by captain
-        captain_players = {}
-        unsold_players = []
-        
-        for p in sold_players_list:
-            captain_id = p.get("captain_id", 0)
-            captain_name = p.get("captain_name", "Unknown")
-            if captain_id not in captain_players:
-                captain_players[captain_id] = {"name": captain_name, "players": [], "total_spent": 0}
-            captain_players[captain_id]["players"].append(p)
-            captain_players[captain_id]["total_spent"] += p.get("bid", 0)
-        
-        # Check unsold players
-        all_player_ids = [p.get("id") for p in players]
-        sold_player_ids = [p.get("id") for p in sold_players_list]
-        unsold_player_ids = [pid for pid in all_player_ids if pid not in sold_player_ids]
-        
-        for pid in unsold_player_ids:
-            for p in players:
-                if p.get("id") == pid:
-                    unsold_players.append(p)
-                    break
-        
-        # Team table
-        if captain_players:
-            for captain_id, data in captain_players.items():
-                story.append(Paragraph(f"<b>Captain: {data['name']}</b>", styles['Normal']))
-                story.append(Spacer(1, 5))
-                
-                team_data = [["Player Name", "Bid Amount"]]
-                for player in data["players"]:
-                    team_data.append([player.get("name", "Unknown"), f"${player.get('bid', 0)}"])
-                
-                team_table = Table(team_data, colWidths=[4*inch, 1.5*inch])
-                team_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 10),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-                ]))
-                story.append(team_table)
-                story.append(Spacer(1, 15))
-        else:
-            story.append(Paragraph("No teams formed yet.", styles['Normal']))
-            story.append(Spacer(1, 10))
-        
-        # UNSOLD PLAYERS section
-        story.append(Paragraph("UNSOLD PLAYERS", team_heading_style))
-        story.append(Spacer(1, 10))
-        
-        if unsold_players:
-            unsold_data = [["Player Name"]]
-            for p in unsold_players:
-                unsold_data.append([p.get("name", "Unknown")])
-            
-            unsold_table = Table(unsold_data, colWidths=[5.5*inch])
-            unsold_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e74c3c')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f9ebea')),
-                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-            ]))
-            story.append(unsold_table)
-        else:
-            story.append(Paragraph("All players were sold - no unsold players!", styles['Normal']))
-        
-        story.append(Spacer(1, 30))
-        
-        # Footer
-        footer_style = ParagraphStyle(
-            'Footer',
-            parent=styles['Normal'],
-            fontSize=10,
-            textColor=colors.grey,
-            alignment=1,
-            spaceAfter=20
-        )
-        story.append(Paragraph("Thanks for using the Cricket Auction Bot! | Solo Tree Community", footer_style))
-        
-        doc.build(story)
-        pdf_bytes.seek(0)
-        
-        await client.send_document(
-            chat_id,
-            pdf_bytes,
-            caption=f"🏏 Cricket Auction Result 🏏\n\nTeam & Player Distribution with Claim Amounts\nHost: [{game.get('host_name', 'Unknown')}](tg://user?id={game.get('host_id', 0)})\n\nThanks for using the bot!",
-            disable_web_page_preview=True
-        )
-    except Exception as e:
-        print(f"PDF generation error: {e}")
-        await client.send_message(
-            chat_id,
-            f"🏏 Cricket Auction Result 🏏\n\nTeam & Player Distribution with Claim Amounts\nHost: [{game.get('host_name', 'Unknown')}](tg://user?id={game.get('host_id', 0)})\n\nThanks for using the bot!"
-        )
-    
-    # Clean up
-    if chat_id in auction_games:
-        del auction_games[chat_id]
-    if chat_id in auction_hosts:
-        del auction_hosts[chat_id]
-    
-    await callback.answer("✅ Auction ended!")
-
-# ================= END AUCTION CANCEL =================
-@app.on_callback_query(filters.regex("^end_auction_cancel$"))
-async def end_auction_cancel_callback(client, callback):
-    await callback.message.delete()
-    await callback.answer("❌ Auction end cancelled!")
-
 def register_handlers(app):
 
     # ================= START GROUP =================
@@ -1619,3 +1340,282 @@ Voters:
     @app.on_message(filters.command("create_auction") & filters.group)
     async def create_auction_cmd_handler(client, message):
         await create_auction_cmd(client, message)
+
+    # ================= END AUCTION COMMAND =================
+    @app.on_message(filters.command("end_auction") & filters.group)
+    async def end_auction_cmd(client, message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        
+        host = auction_hosts.get(chat_id)
+        is_host = host and host["id"] == user_id
+        is_group_admin = await is_admin(client, chat_id, user_id)
+        
+        if not (is_host or is_group_admin):
+            await message.reply("❌ Only auction host or group admin can end the auction!")
+            return
+        
+        game = auction_games.get(chat_id)
+        if not game or game.get("status") != "active":
+            await message.reply("❌ No active auction found!")
+            return
+        
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ Confirm", callback_data="end_auction_confirm"),
+                InlineKeyboardButton("❌ Cancel", callback_data="end_auction_cancel")
+            ]
+        ])
+        
+        await message.reply(
+            "⚠️ Are you sure you want to end the auction? This will generate the final team report.",
+            reply_markup=keyboard
+        )
+
+    # ================= END AUCTION CONFIRM =================
+    @app.on_callback_query(filters.regex("^end_auction_confirm$"))
+    async def end_auction_confirm_callback(client, callback):
+        chat_id = callback.message.chat.id
+        user_id = callback.from_user.id
+        
+        host = auction_hosts.get(chat_id)
+        is_host = host and host["id"] == user_id
+        is_group_admin = await is_admin(client, chat_id, user_id)
+        
+        if not (is_host or is_group_admin):
+            await callback.answer("❌ Only auction host or group admin can end the auction!", show_alert=True)
+            return
+        
+        game = auction_games.get(chat_id)
+        if not game:
+            await callback.answer("❌ No active auction found!", show_alert=True)
+            return
+        
+        current_time = datetime.now()
+        
+        # Prepare JSON data
+        auction_data = {
+            "_id": f"auction_{chat_id}_{int(current_time.timestamp())}",
+            "game_id": chat_id,
+            "game_mode": "auction",
+            "auction_host": game.get("host_id"),
+            "joined_captains": [p.get("id") for p in game.get("players", [])],
+            "captains": {},
+            "players_pool": {},
+            "current_player": None,
+            "starting_price": 0,
+            "current_bid": 0,
+            "current_bidder": None,
+            "auction_state": "ended",
+            "max_credits": game.get("budget", 120),
+            "end_time": current_time.strftime('%Y-%m-%d %H:%M:%S')
+        }
+        
+        # Add sold players
+        sold_players = game.get("sold_players", [])
+        for player in sold_players:
+            captain_id = player.get("captain_id", 0)
+            if captain_id not in auction_data["captains"]:
+                auction_data["captains"][captain_id] = []
+            auction_data["captains"][captain_id].append({
+                "name": player.get("name"),
+                "id": player.get("id"),
+                "bid": player.get("bid", 0)
+            })
+        
+        # JSON file
+        json_bytes = io.BytesIO(json.dumps(auction_data, indent=4).encode('utf-8'))
+        json_bytes.name = "auction_data.json"
+        
+        await callback.message.edit_text("📄 Auction data saved before ending")
+        
+        await client.send_document(
+            chat_id,
+            json_bytes,
+            caption="📄 Auction data saved before ending"
+        )
+        
+        # Create PDF report
+        pdf_bytes = io.BytesIO()
+        
+        try:
+            from reportlab.lib.pagesizes import letter
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib import colors
+            from reportlab.lib.units import inch
+            
+            doc = SimpleDocTemplate(pdf_bytes, pagesize=letter)
+            styles = getSampleStyleSheet()
+            story = []
+            
+            # Title
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=22,
+                textColor=colors.HexColor('#1a5f7a'),
+                alignment=1,
+                spaceAfter=20
+            )
+            story.append(Paragraph("CRICKET AUCTION RESULTS", title_style))
+            story.append(Spacer(1, 10))
+            
+            # Subtitle
+            subtitle_style = ParagraphStyle(
+                'Subtitle',
+                parent=styles['Heading2'],
+                fontSize=14,
+                textColor=colors.HexColor('#2c3e50'),
+                alignment=1,
+                spaceAfter=15
+            )
+            story.append(Paragraph("Team & Player Distribution with Bid Amounts", subtitle_style))
+            story.append(Spacer(1, 10))
+            
+            # Host info
+            host_name = game.get('host_name', 'Unknown')
+            host_id = game.get('host_id', 0)
+            date_str = current_time.strftime('%B %d, %Y at %H:%M')
+            
+            host_style = ParagraphStyle(
+                'HostStyle',
+                parent=styles['Normal'],
+                fontSize=11,
+                textColor=colors.HexColor('#555'),
+                alignment=1,
+                spaceAfter=20
+            )
+            story.append(Paragraph(f"Host: {host_name} | Date: {date_str}", host_style))
+            story.append(Spacer(1, 15))
+            
+            # Team Distribution heading
+            team_heading_style = ParagraphStyle(
+                'TeamHeading',
+                parent=styles['Heading3'],
+                fontSize=16,
+                textColor=colors.HexColor('#e67e22'),
+                alignment=0,
+                spaceAfter=10
+            )
+            story.append(Paragraph("TEAM DISTRIBUTION", team_heading_style))
+            story.append(Spacer(1, 10))
+            
+            # Create team distribution table
+            players = game.get("players", [])
+            sold_players_list = game.get("sold_players", [])
+            
+            # Group sold players by captain
+            captain_players = {}
+            unsold_players = []
+            
+            for p in sold_players_list:
+                captain_id = p.get("captain_id", 0)
+                captain_name = p.get("captain_name", "Unknown")
+                if captain_id not in captain_players:
+                    captain_players[captain_id] = {"name": captain_name, "players": [], "total_spent": 0}
+                captain_players[captain_id]["players"].append(p)
+                captain_players[captain_id]["total_spent"] += p.get("bid", 0)
+            
+            # Check unsold players
+            all_player_ids = [p.get("id") for p in players]
+            sold_player_ids = [p.get("id") for p in sold_players_list]
+            unsold_player_ids = [pid for pid in all_player_ids if pid not in sold_player_ids]
+            
+            for pid in unsold_player_ids:
+                for p in players:
+                    if p.get("id") == pid:
+                        unsold_players.append(p)
+                        break
+            
+            # Team table
+            if captain_players:
+                for captain_id, data in captain_players.items():
+                    story.append(Paragraph(f"<b>Captain: {data['name']}</b>", styles['Normal']))
+                    story.append(Spacer(1, 5))
+                    
+                    team_data = [["Player Name", "Bid Amount"]]
+                    for player in data["players"]:
+                        team_data.append([player.get("name", "Unknown"), f"${player.get('bid', 0)}"])
+                    
+                    team_table = Table(team_data, colWidths=[4*inch, 1.5*inch])
+                    team_table.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
+                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, 0), 10),
+                        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                    ]))
+                    story.append(team_table)
+                    story.append(Spacer(1, 15))
+            else:
+                story.append(Paragraph("No teams formed yet.", styles['Normal']))
+                story.append(Spacer(1, 10))
+            
+            # UNSOLD PLAYERS section
+            story.append(Paragraph("UNSOLD PLAYERS", team_heading_style))
+            story.append(Spacer(1, 10))
+            
+            if unsold_players:
+                unsold_data = [["Player Name"]]
+                for p in unsold_players:
+                    unsold_data.append([p.get("name", "Unknown")])
+                
+                unsold_table = Table(unsold_data, colWidths=[5.5*inch])
+                unsold_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e74c3c')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f9ebea')),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                ]))
+                story.append(unsold_table)
+            else:
+                story.append(Paragraph("All players were sold - no unsold players!", styles['Normal']))
+            
+            story.append(Spacer(1, 30))
+            
+            # Footer
+            footer_style = ParagraphStyle(
+                'Footer',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.grey,
+                alignment=1,
+                spaceAfter=20
+            )
+            story.append(Paragraph("Thanks for using the Cricket Auction Bot! | Solo Tree Community", footer_style))
+            
+            doc.build(story)
+            pdf_bytes.seek(0)
+            
+            await client.send_document(
+                chat_id,
+                pdf_bytes,
+                caption=f"🏏 Cricket Auction Result 🏏\n\nTeam & Player Distribution with Claim Amounts\nHost: [{game.get('host_name', 'Unknown')}](tg://user?id={game.get('host_id', 0)})\n\nThanks for using the bot!",
+                disable_web_page_preview=True
+            )
+        except Exception as e:
+            print(f"PDF generation error: {e}")
+            await client.send_message(
+                chat_id,
+                f"🏏 Cricket Auction Result 🏏\n\nTeam & Player Distribution with Claim Amounts\nHost: [{game.get('host_name', 'Unknown')}](tg://user?id={game.get('host_id', 0)})\n\nThanks for using the bot!"
+            )
+        
+        # Clean up
+        if chat_id in auction_games:
+            del auction_games[chat_id]
+        if chat_id in auction_hosts:
+            del auction_hosts[chat_id]
+        
+        await callback.answer("✅ Auction ended!")
+
+    # ================= END AUCTION CANCEL =================
+    @app.on_callback_query(filters.regex("^end_auction_cancel$"))
+    async def end_auction_cancel_callback(client, callback):
+        await callback.message.delete()
+        await callback.answer("❌ Auction end cancelled!")
