@@ -207,9 +207,17 @@ Who will be the game host for this match? 🤔"""
         chat_id = callback.message.chat.id
         user = callback.from_user
         
-        if chat_id in team_hosts:
-            await callback.answer("Host already selected!", show_alert=True)
+        # Check if there's an existing game that is still playing
+        existing_game = team_games.get(chat_id)
+        if existing_game and existing_game.get("status") == "playing":
+            await callback.answer("❌ A match is currently in progress! Cannot change host.", show_alert=True)
             return
+        
+        # Clear any existing data
+        if chat_id in team_games:
+            del team_games[chat_id]
+        if chat_id in team_hosts:
+            del team_hosts[chat_id]
         
         team_hosts[chat_id] = {
             "id": user.id,
@@ -239,7 +247,10 @@ Who will be the game host for this match? 🤔"""
         }
         
         await callback.message.delete()
-        await client.send_message(chat_id, f"👑 [{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏")
+        await client.send_message(
+            chat_id,
+            f"👑 [{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏"
+        )
         await callback.answer()
 
     # ================= CREATE TEAM COMMAND =================
@@ -301,7 +312,6 @@ Who will be the game host for this match? 🤔"""
             "score": 0, "balls": 0, "fours": 0, "sixes": 0, "out": False, "history": []
         })
         
-        current = len(game["team_a"])
         await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team A!")
 
     # ================= TEAM A TIMER =================
@@ -341,7 +351,6 @@ Who will be the game host for this match? 🤔"""
             "score": 0, "balls": 0, "fours": 0, "sixes": 0, "out": False, "history": []
         })
         
-        current = len(game["team_b"])
         await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team B!")
 
     # ================= TEAM B TIMER =================
@@ -607,7 +616,7 @@ Who will be the game host for this match? 🤔"""
         
         keyboard = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("✅ Confirm", callback_data=f"end_match_confirm"),
+                InlineKeyboardButton("✅ Confirm", callback_data="end_match_confirm"),
                 InlineKeyboardButton("❌ Cancel", callback_data="end_match_cancel")
             ]
         ])
