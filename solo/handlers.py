@@ -630,7 +630,7 @@ Who will be the game host for this match? 🤔"""
             reply_markup=keyboard
         )
 
-        # ================= END MATCH CONFIRM =================
+            # ================= END MATCH CONFIRM =================
     @app.on_callback_query(filters.regex("^end_match_confirm$"))
     async def end_match_confirm_callback(client, callback):
         chat_id = callback.message.chat.id
@@ -650,38 +650,81 @@ Who will be the game host for this match? 🤔"""
             await callback.answer("❌ No active game found!", show_alert=True)
             return
         
-        # If match hasn't started, just clean up without report
+        # Create match report (with or without scores)
+        from datetime import datetime
+        current_time = datetime.now()
+        
         if game.get("match_start_time") is None:
-            # Clean up
-            if chat_id in team_games:
-                del team_games[chat_id]
-            if chat_id in team_hosts:
-                del team_hosts[chat_id]
+            # Match never started - just team info
+            date_str = current_time.strftime('%Y-%m-%d')
+            time_str = current_time.strftime('%H:%M:%S')
             
-            await callback.message.edit_text("🏏 Match cancelled successfully!")
-            await callback.answer("✅ Match cancelled!")
-            return
-        
-        game["match_end_time"] = datetime.now()
-        game["game_over"] = True
-        
-        # Calculate winner
-        if game["team_a_score"] > game["team_b_score"]:
-            winner = "Team A"
-            win_margin = f"{game['team_a_score'] - game['team_b_score']} runs"
-        elif game["team_b_score"] > game["team_a_score"]:
-            winner = "Team B"
-            win_margin = f"{game['team_b_score'] - game['team_a_score']} runs"
+            match_report = f"""═══════════════════════════════
+         🏏 MATCH CANCELLED 🏏
+═══════════════════════════════
+
+📅 Date: {date_str}
+⏰ Time: {time_str}
+👑 Host: {game['host_name']}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          📊 TEAM INFO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏏 TEAM A: {len(game['team_a'])} players
+🏏 TEAM B: {len(game['team_b'])} players
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         👥 TEAM A PLAYERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+
+            for p in game["team_a"]:
+                match_report += f"\n   🏏 {p['name']} - Not played"
+
+            match_report += f"""
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         👥 TEAM B PLAYERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+
+            for p in game["team_b"]:
+                match_report += f"\n   🏏 {p['name']} - Not played"
+
+            match_report += """
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          ℹ️ STATUS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   ❌ Match was cancelled before start!
+
+═══════════════════════════════
+      Match Cancelled!
+═══════════════════════════════"""
+            
+            await callback.message.edit_text("🏏 Match ended successfully!")
+            
         else:
-            winner = "Match Tied"
-            win_margin = "0 runs"
-        
-        # Create match report with safe date handling
-        start_time = game['match_start_time']
-        date_str = start_time.strftime('%Y-%m-%d') if start_time else "Not recorded"
-        time_str = start_time.strftime('%H:%M:%S') if start_time else "Not recorded"
-        
-        match_report = f"""═══════════════════════════════
+            # Match started - full report with scores
+            game["match_end_time"] = current_time
+            game["game_over"] = True
+            
+            # Calculate winner
+            if game["team_a_score"] > game["team_b_score"]:
+                winner = "Team A"
+                win_margin = f"{game['team_a_score'] - game['team_b_score']} runs"
+            elif game["team_b_score"] > game["team_a_score"]:
+                winner = "Team B"
+                win_margin = f"{game['team_b_score'] - game['team_a_score']} runs"
+            else:
+                winner = "Match Tied"
+                win_margin = "0 runs"
+            
+            start_time = game['match_start_time']
+            date_str = start_time.strftime('%Y-%m-%d')
+            time_str = start_time.strftime('%H:%M:%S')
+            
+            match_report = f"""═══════════════════════════════
          🏏 MATCH REPORT 🏏
 ═══════════════════════════════
 
@@ -706,31 +749,31 @@ Who will be the game host for this match? 🤔"""
          👥 TEAM A PLAYERS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
-        for p in game["team_a"]:
-            status = "❌" if p.get("out", False) else "🏏"
-            match_report += f"\n   {status} {p['name']} - {p.get('score', 0)} runs ({p.get('balls', 0)} balls)"
-            if p.get('fours', 0) > 0 or p.get('sixes', 0) > 0:
-                match_report += f" (4s: {p.get('fours', 0)}, 6s: {p.get('sixes', 0)})"
+            for p in game["team_a"]:
+                status = "❌" if p.get("out", False) else "🏏"
+                match_report += f"\n   {status} {p['name']} - {p.get('score', 0)} runs ({p.get('balls', 0)} balls)"
+                if p.get('fours', 0) > 0 or p.get('sixes', 0) > 0:
+                    match_report += f" (4s: {p.get('fours', 0)}, 6s: {p.get('sixes', 0)})"
 
-        match_report += f"""
+            match_report += f"""
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
          👥 TEAM B PLAYERS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
-        for p in game["team_b"]:
-            status = "❌" if p.get("out", False) else "🏏"
-            match_report += f"\n   {status} {p['name']} - {p.get('score', 0)} runs ({p.get('balls', 0)} balls)"
-            if p.get('fours', 0) > 0 or p.get('sixes', 0) > 0:
-                match_report += f" (4s: {p.get('fours', 0)}, 6s: {p.get('sixes', 0)})"
+            for p in game["team_b"]:
+                status = "❌" if p.get("out", False) else "🏏"
+                match_report += f"\n   {status} {p['name']} - {p.get('score', 0)} runs ({p.get('balls', 0)} balls)"
+                if p.get('fours', 0) > 0 or p.get('sixes', 0) > 0:
+                    match_report += f" (4s: {p.get('fours', 0)}, 6s: {p.get('sixes', 0)})"
 
-        match_report += """
+            match_report += """
 
 ═══════════════════════════════
       Match Ended Successfully!
 ═══════════════════════════════"""
-        
-        await callback.message.edit_text("🏏 Match ended successfully!")
+            
+            await callback.message.edit_text("🏏 Match ended successfully!")
         
         # Send report as text file
         report_bytes = io.BytesIO(match_report.encode('utf-8'))
