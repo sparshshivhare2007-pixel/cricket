@@ -1,4 +1,4 @@
-# config.py - Final Complete Version
+# config.py - Final Complete Version with Auction Assets
 
 import os
 from dotenv import load_dotenv
@@ -34,9 +34,17 @@ IMAGES_PATH = os.path.join(ASSETS_PATH, "images")
 SELECT_GAME_IMAGE = os.path.join(IMAGES_PATH, "select_game.jpg")
 VOTE_IMAGE = os.path.join(IMAGES_PATH, "vote.jpg")
 SOLO_PLAY_IMAGE = os.path.join(IMAGES_PATH, "solo_play.jpg")
-HOST_IMAGE_URL = os.path.join(IMAGES_PATH, "host_image.jpg")  # SOLO TREE COMMUNITY wali image
+HOST_IMAGE_URL = os.path.join(IMAGES_PATH, "host_image.jpg")
 SOLO_GAME_START_IMAGE = os.path.join(IMAGES_PATH, "game_start.jpg")
-TEAM_PLAY_IMAGE = os.path.join(IMAGES_PATH, "team_match.jpg")  # Team Match Mode Image
+TEAM_PLAY_IMAGE = os.path.join(IMAGES_PATH, "team_match.jpg")
+
+# ========== AUCTION MODE IMAGES ==========
+AUCTION_PLAY_IMAGE = os.path.join(IMAGES_PATH, "auction_play.jpg")
+AUCTION_HOST_IMAGE = os.path.join(IMAGES_PATH, "auction_host.jpg")
+
+# ========== TOURNAMENT MODE IMAGES ==========
+TOURNAMENT_PLAY_IMAGE = os.path.join(IMAGES_PATH, "tournament_play.jpg")
+TOURNAMENT_HOST_IMAGE = os.path.join(IMAGES_PATH, "tournament_host.jpg")
 
 # Fallback URLs for images
 SELECT_GAME_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
@@ -44,7 +52,11 @@ VOTE_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 SOLO_PLAY_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 HOST_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 SOLO_GAME_START_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
-TEAM_PLAY_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"  # Team Match fallback
+TEAM_PLAY_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
+AUCTION_PLAY_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
+AUCTION_HOST_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
+TOURNAMENT_PLAY_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
+TOURNAMENT_HOST_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 
 # ========== SOLO MODE VIDEOS ==========
 BOWLING_VIDEO_PATH = os.path.join(VIDEOS_PATH, "bowling.mp4")
@@ -89,7 +101,15 @@ VOTE_IMG = get_image_file(VOTE_IMAGE, VOTE_IMAGE_FALLBACK)
 SOLO_PLAY_IMG = get_image_file(SOLO_PLAY_IMAGE, SOLO_PLAY_IMAGE_FALLBACK)
 HOST_IMAGE_URL = get_image_file(HOST_IMAGE_URL, HOST_IMAGE_FALLBACK)
 SOLO_START_IMAGE = get_image_file(SOLO_GAME_START_IMAGE, SOLO_GAME_START_IMAGE_FALLBACK)
-TEAM_PLAY_IMG = get_image_file(TEAM_PLAY_IMAGE, TEAM_PLAY_IMAGE_FALLBACK)  # Team Match Image
+TEAM_PLAY_IMG = get_image_file(TEAM_PLAY_IMAGE, TEAM_PLAY_IMAGE_FALLBACK)
+
+# ========== AUCTION IMAGES ==========
+AUCTION_PLAY_IMG = get_image_file(AUCTION_PLAY_IMAGE, AUCTION_PLAY_IMAGE_FALLBACK)
+AUCTION_HOST_IMG = get_image_file(AUCTION_HOST_IMAGE, AUCTION_HOST_IMAGE_FALLBACK)
+
+# ========== TOURNAMENT IMAGES ==========
+TOURNAMENT_PLAY_IMG = get_image_file(TOURNAMENT_PLAY_IMAGE, TOURNAMENT_PLAY_IMAGE_FALLBACK)
+TOURNAMENT_HOST_IMG = get_image_file(TOURNAMENT_HOST_IMAGE, TOURNAMENT_HOST_IMAGE_FALLBACK)
 
 # ========== PRE-DEFINE VIDEOS ==========
 BOWLING_VIDEO = get_video_file(BOWLING_VIDEO_PATH, BOWLING_VIDEO_URL)
