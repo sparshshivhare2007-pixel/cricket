@@ -604,9 +604,13 @@ Who will be the game host for this match? 🤔"""
         chat_id = message.chat.id
         user_id = message.from_user.id
         
+        # Check if user is host OR group admin
         host = team_hosts.get(chat_id)
-        if not host or host["id"] != user_id:
-            await message.reply("❌ Only host can end the match!")
+        is_host = host and host["id"] == user_id
+        is_group_admin = await is_admin(client, chat_id, user_id)
+        
+        if not (is_host or is_group_admin):
+            await message.reply("❌ Only host or group admin can end the match!")
             return
         
         game = team_games.get(chat_id)
@@ -626,15 +630,19 @@ Who will be the game host for this match? 🤔"""
             reply_markup=keyboard
         )
 
-       # ================= END MATCH CONFIRM =================
+    # ================= END MATCH CONFIRM =================
     @app.on_callback_query(filters.regex("^end_match_confirm$"))
     async def end_match_confirm_callback(client, callback):
         chat_id = callback.message.chat.id
         user_id = callback.from_user.id
         
+        # Check if user is host OR group admin
         host = team_hosts.get(chat_id)
-        if not host or host["id"] != user_id:
-            await callback.answer("❌ Only host can end the match!", show_alert=True)
+        is_host = host and host["id"] == user_id
+        is_group_admin = await is_admin(client, chat_id, user_id)
+        
+        if not (is_host or is_group_admin):
+            await callback.answer("❌ Only host or group admin can end the match!", show_alert=True)
             return
         
         game = team_games.get(chat_id)
@@ -734,6 +742,7 @@ Who will be the game host for this match? 🤔"""
             del team_hosts[chat_id]
         
         await callback.answer("✅ Match ended!")
+
     # ================= END MATCH CANCEL =================
     @app.on_callback_query(filters.regex("^end_match_cancel$"))
     async def end_match_cancel_callback(client, callback):
