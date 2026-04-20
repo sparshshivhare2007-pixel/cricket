@@ -1,7 +1,6 @@
 # solo/score.py - Live Score Module (Solo + Team)
 
 from solo.game import games
-from team.handlers import team_games
 from solo.scoreboard import build_scoreboard
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from config import LIVE_SCORE_LINK, SOLO_ICONS
