@@ -1,5 +1,3 @@
-# solo/handlers.py - Final Complete Working Version
-
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pyrogram.enums import ChatMemberStatus
@@ -10,7 +8,6 @@ from solo.score import get_live_score
 import asyncio
 from datetime import datetime
 import io
-import json
 
 active_votes = {}
 bowling_tasks = {}
@@ -19,13 +16,11 @@ bowling_tasks = {}
 team_games = {}
 team_hosts = {}
 
-# ================= AUCTION MODE VARIABLES =================
-auction_games = {}
-auction_hosts = {}
 
 def get_run_video(runs):
     run_videos = {1: RUN_1_VIDEO, 2: RUN_2_VIDEO, 3: RUN_3_VIDEO, 4: RUN_4_VIDEO, 5: RUN_5_VIDEO, 6: RUN_6_VIDEO}
     return run_videos.get(runs, RUN_1_VIDEO)
+
 
 async def is_admin(client, chat_id, user_id):
     try:
@@ -33,6 +28,7 @@ async def is_admin(client, chat_id, user_id):
         return member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]
     except:
         return False
+
 
 async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, message_id):
     """Send warnings and penalty if bowler doesn't respond"""
@@ -106,107 +102,6 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
     if chat_id in bowling_tasks:
         del bowling_tasks[chat_id]
 
-# ================= AUCTION MODE FUNCTIONS =================
-async def auction_mode_start(client, callback):
-    chat_id = callback.message.chat.id
-    
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("👑 I'm the Host", callback_data="auction_become_host")]
-    ])
-    
-    caption = """🎉 New Auction Alert! 🎉 
-
-Who will be the host for this Auction? 🤔"""
-    
-    try:
-        await client.send_photo(
-            chat_id,
-            AUCTION_PLAY_IMG,
-            caption=caption,
-            reply_markup=keyboard
-        )
-    except:
-        await client.send_message(
-            chat_id,
-            caption,
-            reply_markup=keyboard
-        )
-    await callback.answer()
-
-async def auction_become_host(client, callback):
-    chat_id = callback.message.chat.id
-    user = callback.from_user
-    
-    existing_auction = auction_games.get(chat_id)
-    if existing_auction and existing_auction.get("status") == "active":
-        await callback.answer("❌ An auction is currently in progress! Cannot change host.", show_alert=True)
-        return
-    
-    if chat_id in auction_games:
-        del auction_games[chat_id]
-    if chat_id in auction_hosts:
-        del auction_hosts[chat_id]
-    
-    auction_hosts[chat_id] = {
-        "id": user.id,
-        "name": user.first_name,
-        "username": user.username
-    }
-    
-    auction_games[chat_id] = {
-        "host_id": user.id,
-        "host_name": user.first_name,
-        "status": "waiting_host",
-        "players": [],
-        "sold_players": [],
-        "budget": 120,
-        "current_player": None,
-        "current_bid": 0,
-        "current_bidder": None
-    }
-    
-    await callback.message.delete()
-    
-    try:
-        await client.send_photo(
-            chat_id,
-            AUCTION_HOST_IMG,
-            caption=f"👑 [{user.first_name}](tg://user?id={user.id}) is now the auction host! Auction host can now use /create_auction. Let's get the Auction started! 🏷️",
-            disable_web_page_preview=True
-        )
-    except:
-        await client.send_message(
-            chat_id,
-            f"👑 [{user.first_name}](tg://user?id={user.id}) is now the auction host! Auction host can now use /create_auction. Let's get the Auction started! 🏷️"
-        )
-    await callback.answer()
-
-async def create_auction_cmd(client, message):
-    chat_id = message.chat.id
-    user_id = message.from_user.id
-    
-    print(f"🔴 CREATE AUCTION - Chat: {chat_id}, User: {user_id}")
-    
-    host = auction_hosts.get(chat_id)
-    if not host:
-        await message.reply("❌ No auction host found! Start auction mode first.")
-        return
-    
-    if host["id"] != user_id:
-        await message.reply("❌ Only the auction host can create auction!")
-        return
-    
-    game = auction_games.get(chat_id)
-    if not game or game["status"] != "waiting_host":
-        await message.reply("❌ Auction already created or in progress!")
-        return
-    
-    game["status"] = "active"
-    
-    await message.reply(
-        f"🎉 Auction is now live! Join the auction by sending /join_auction 📣\n\n"
-        f"👥 Players can join the auction!"
-    )
 
 def register_handlers(app):
 
@@ -255,13 +150,15 @@ def register_handlers(app):
     # ================= SELECT GAME MENU =================
     async def select_game_menu(client, message):
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("👤Solo", callback_data="mode_solo"), InlineKeyboardButton("👥Team", callback_data="mode_team")],
-            [InlineKeyboardButton("⭐️Start Auction", callback_data="mode_auction"), InlineKeyboardButton("🏆Tournament Mode", callback_data="mode_tournament")],
-            [InlineKeyboardButton("Cancel", callback_data="mode_cancel")]
+            [InlineKeyboardButton("👤 Solo", callback_data="mode_solo"), InlineKeyboardButton("👥 Team", callback_data="mode_team")],
+            [InlineKeyboardButton("🏆 Tournament Mode", callback_data="mode_tournament")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="mode_cancel")]
         ])
         
-        caption = """Select game mode:"""
-        
+        caption = """🏏 **Select Game Mode** 🏏
+
+Choose how you want to play:"""
+
         try:
             await message.reply_photo(SELECT_GAME_IMG, caption=caption, reply_markup=keyboard)
         except:
@@ -283,14 +180,8 @@ def register_handlers(app):
             await team_mode_start(client, callback)
             return
         
-        if action == "auction":
-            await callback.message.delete()
-            await callback.answer("Opening Auction Mode...")
-            await auction_mode_start(client, callback)
-            return
-        
-        if action in ["tournament"]:
-            await callback.answer(f"{action} mode coming soon!", show_alert=True)
+        if action == "tournament":
+            await callback.answer("Tournament Mode coming soon!", show_alert=True)
             return
         
         if action == "solo":
@@ -304,7 +195,7 @@ def register_handlers(app):
             [InlineKeyboardButton("👑 I'm the Host", callback_data="team_become_host")]
         ])
         
-        caption = """🎉 New Game Alert! 🎉 
+        caption = """🎉 **New Game Alert!** 🎉 
 
 Who will be the game host for this match? 🤔"""
         
@@ -715,11 +606,6 @@ Who will be the game host for this match? 🤔"""
         chat_id = message.chat.id
         user_id = message.from_user.id
         
-        auction_game = auction_games.get(chat_id)
-        if auction_game and auction_game.get("status") == "active":
-            await message.reply("❌ You cannot end an auction match using this command! Use /end_auction instead.")
-            return
-        
         host = team_hosts.get(chat_id)
         is_host = host and host["id"] == user_id
         is_group_admin = await is_admin(client, chat_id, user_id)
@@ -941,14 +827,14 @@ Who will be the game host for this match? 🤔"""
     # ================= BALL SELECTION MENU =================
     async def ball_selection_menu(client, callback):
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Solo Play - 1 Ball", callback_data="ball_1")],
-            [InlineKeyboardButton("Solo Play - 3 Ball", callback_data="ball_3")]
+            [InlineKeyboardButton("🎯 Solo Play - 1 Ball", callback_data="ball_1")],
+            [InlineKeyboardButton("🎯 Solo Play - 3 Ball", callback_data="ball_3")]
         ])
         
-        caption = """🥎 Choose the Bowling mode:
+        caption = """🏏 **Choose Bowling Mode** 🏏
 
-Solo Play - 1 Ball
-Solo Play - 3 Ball"""
+• Solo Play - 1 Ball (Single ball per bowler)
+• Solo Play - 3 Ball (Three balls per bowler)"""
         
         await callback.message.delete()
         
@@ -983,7 +869,7 @@ Solo Play - 3 Ball"""
         
         await client.send_message(
             chat_id,
-            f"🎉Game created! Join the game using /joingame (2 minutes to join)\n⏰"
+            f"🎉 Game created! Join the game using /joingame (2 minutes to join)\n⏰"
         )
         
         asyncio.create_task(start_join_timer(client, chat_id))
@@ -1035,7 +921,7 @@ Solo Play - 3 Ball"""
         
         active_votes[chat_id] = {"active": True, "count": 0, "users": [], "msg_id": None}
         
-        caption = """VOTING REQUIRED!
+        caption = """🗳️ **VOTING REQUIRED!** 🗳️
 
 You are not an admin. 3 votes needed.
 
@@ -1045,12 +931,12 @@ Current votes: 0/3"""
             msg = await message.reply_photo(
                 VOTE_IMG, 
                 caption=caption,
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Vote to Start", callback_data="vote")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]])
             )
         except:
             msg = await message.reply(
                 caption,
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Vote to Start", callback_data="vote")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]])
             )
         
         active_votes[chat_id]["msg_id"] = msg.id
@@ -1087,24 +973,24 @@ Current votes: 0/3"""
             vote["active"] = False
             await callback.answer("Voting successful!")
         else:
-            caption = f"""VOTING REQUIRED!
+            caption = f"""🗳️ **VOTING REQUIRED!** 🗳️
 
 You are not an admin. 3 votes needed.
 
 Current votes: {vote['count']}/3
 
-Voters:
+**Voters:**
 {chr(10).join(voters)}"""
             
             try:
                 await callback.message.edit_caption(
                     caption=caption,
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Vote to Start", callback_data="vote")]])
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]])
                 )
             except:
                 await callback.message.edit_text(
                     caption,
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Vote to Start", callback_data="vote")]])
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]])
                 )
             await callback.answer(f"Voted! ({vote['count']}/3)")
 
@@ -1116,7 +1002,7 @@ Voters:
             try:
                 await client.edit_message_caption(
                     chat_id, vote["msg_id"],
-                    caption=f"Voting expired! Got {vote['count']}/3 votes.\nUse /start again."
+                    caption=f"❌ Voting expired! Got {vote['count']}/3 votes.\nUse /start again."
                 )
             except:
                 pass
@@ -1137,7 +1023,7 @@ Voters:
         if join_game(chat_id, message.from_user):
             game = games[chat_id]
             players_count = len(game["players"])
-            await message.reply(f"🎉{message.from_user.first_name}, you've joined the game! (Player {players_count}) 👍")
+            await message.reply(f"🎉 {message.from_user.first_name}, you've joined the game! (Player {players_count}) 👍")
 
     # ================= START GAME MATCH =================
     async def start_game_match(client, chat_id):
@@ -1154,7 +1040,8 @@ Voters:
         game = games[chat_id]
         players = game["players"]
         
-        host_text = "SOLO TREE COMMUNITY\n\nUnknown Host\n\nSolo Players\n\n"
+        host_text = "🏏 **SOLO TREE COMMUNITY** 🏏\n\n"
+        host_text += "**Players List:**\n"
         for i, p in enumerate(players, 1):
             name = f"@{p['username']}" if p.get("username") else p["name"]
             host_text += f"{i}. {name}\n"
@@ -1165,10 +1052,10 @@ Voters:
             await client.send_message(chat_id, host_text)
         
         batter = game["current_batter"]
-        await client.send_message(chat_id, f"Hey [{batter['name']}](tg://user?id={batter['id']}), now you're batter!")
+        await client.send_message(chat_id, f"🎯 Hey [{batter['name']}](tg://user?id={batter['id']}), now you're batter!")
         
         bowler = game["current_bowler"]
-        await client.send_message(chat_id, f"Hey [{bowler['name']}](tg://user?id={bowler['id']}), now you're bowling!")
+        await client.send_message(chat_id, f"🎯 Hey [{bowler['name']}](tg://user?id={bowler['id']}), now you're bowling!")
         
         await asyncio.sleep(1)
         await send_bowling_video(client, chat_id, bowler)
@@ -1197,7 +1084,7 @@ Voters:
         try:
             await client.send_message(
                 bowler["id"],
-                f"Current batter: [{batter['name']}](tg://user?id={batter['id']})\n\nSend Your number:",
+                f"🎯 Current batter: [{batter['name']}](tg://user?id={batter['id']})\n\nSend Your number (1-6):",
                 disable_web_page_preview=True
             )
         except:
@@ -1306,7 +1193,7 @@ Voters:
             await message.reply(build_scoreboard(game["players"], is_final=False))
             
             new_batter = game["current_batter"]
-            await client.send_message(chat_id, f"Hey [{new_batter['name']}](tg://user?id={new_batter['id']}), now you're batter!")
+            await client.send_message(chat_id, f"🎯 Hey [{new_batter['name']}](tg://user?id={new_batter['id']}), now you're batter!")
             await client.send_message(chat_id, f"New batsman: [{new_batter['name']}](tg://user?id={new_batter['id']})\n\nGet ready for the next ball ⚾")
             
             if not game.get("game_over"):
@@ -1327,295 +1214,7 @@ Voters:
                 if game["current_bowler_balls"] >= ball_mode:
                     await message.reply(build_scoreboard(game["players"], is_final=False))
                     new_bowler = game["current_bowler"]
-                    await client.send_message(chat_id, f"Bowler changed! Now bowling: [{new_bowler['name']}](tg://user?id={new_bowler['id']})")
+                    await client.send_message(chat_id, f"🔄 Bowler changed! Now bowling: [{new_bowler['name']}](tg://user?id={new_bowler['id']})")
                     await send_bowling_video(client, chat_id, new_bowler)
                 else:
                     await send_bowling_video(client, chat_id, bowler)
-
-    # ================= AUCTION CALLBACKS =================
-    @app.on_callback_query(filters.regex("^auction_become_host$"))
-    async def auction_become_host_callback(client, callback):
-        await auction_become_host(client, callback)
-
-    @app.on_message(filters.command("create_auction") & filters.group)
-    async def create_auction_cmd_handler(client, message):
-        await create_auction_cmd(client, message)
-
-    # ================= END AUCTION COMMAND =================
-    @app.on_message(filters.command("end_auction") & filters.group)
-    async def end_auction_cmd(client, message):
-        chat_id = message.chat.id
-        user_id = message.from_user.id
-        
-        host = auction_hosts.get(chat_id)
-        is_host = host and host["id"] == user_id
-        is_group_admin = await is_admin(client, chat_id, user_id)
-        
-        if not (is_host or is_group_admin):
-            await message.reply("❌ Only auction host or group admin can end the auction!")
-            return
-        
-        game = auction_games.get(chat_id)
-        if not game or game.get("status") != "active":
-            await message.reply("❌ No active auction found!")
-            return
-        
-        keyboard = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("✅ Confirm", callback_data="end_auction_confirm"),
-                InlineKeyboardButton("❌ Cancel", callback_data="end_auction_cancel")
-            ]
-        ])
-        
-        await message.reply(
-            "⚠️ Are you sure you want to end the auction? This will generate the final team report.",
-            reply_markup=keyboard
-        )
-
-    # ================= END AUCTION CONFIRM =================
-    @app.on_callback_query(filters.regex("^end_auction_confirm$"))
-    async def end_auction_confirm_callback(client, callback):
-        chat_id = callback.message.chat.id
-        user_id = callback.from_user.id
-        
-        host = auction_hosts.get(chat_id)
-        is_host = host and host["id"] == user_id
-        is_group_admin = await is_admin(client, chat_id, user_id)
-        
-        if not (is_host or is_group_admin):
-            await callback.answer("❌ Only auction host or group admin can end the auction!", show_alert=True)
-            return
-        
-        game = auction_games.get(chat_id)
-        if not game:
-            await callback.answer("❌ No active auction found!", show_alert=True)
-            return
-        
-        current_time = datetime.now()
-        
-        # Prepare JSON data
-        auction_data = {
-            "_id": f"auction_{chat_id}_{int(current_time.timestamp())}",
-            "game_id": chat_id,
-            "game_mode": "auction",
-            "auction_host": game.get("host_id"),
-            "joined_captains": [p.get("id") for p in game.get("players", [])],
-            "captains": {},
-            "players_pool": {},
-            "current_player": None,
-            "starting_price": 0,
-            "current_bid": 0,
-            "current_bidder": None,
-            "auction_state": "ended",
-            "max_credits": game.get("budget", 120),
-            "end_time": current_time.strftime('%Y-%m-%d %H:%M:%S')
-        }
-        
-        # Add sold players
-        sold_players = game.get("sold_players", [])
-        for player in sold_players:
-            captain_id = player.get("captain_id", 0)
-            if captain_id not in auction_data["captains"]:
-                auction_data["captains"][captain_id] = []
-            auction_data["captains"][captain_id].append({
-                "name": player.get("name"),
-                "id": player.get("id"),
-                "bid": player.get("bid", 0)
-            })
-        
-        # JSON file
-        json_bytes = io.BytesIO(json.dumps(auction_data, indent=4).encode('utf-8'))
-        json_bytes.name = "auction_data.json"
-        
-        await callback.message.edit_text("📄 Auction data saved before ending")
-        
-        await client.send_document(
-            chat_id,
-            json_bytes,
-            caption="📄 Auction data saved before ending"
-        )
-        
-        # Create PDF report
-        pdf_bytes = io.BytesIO()
-        
-        try:
-            from reportlab.lib.pagesizes import letter
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-            from reportlab.lib import colors
-            from reportlab.lib.units import inch
-            
-            doc = SimpleDocTemplate(pdf_bytes, pagesize=letter)
-            styles = getSampleStyleSheet()
-            story = []
-            
-            # Title
-            title_style = ParagraphStyle(
-                'CustomTitle',
-                parent=styles['Heading1'],
-                fontSize=22,
-                textColor=colors.HexColor('#1a5f7a'),
-                alignment=1,
-                spaceAfter=20
-            )
-            story.append(Paragraph("CRICKET AUCTION RESULTS", title_style))
-            story.append(Spacer(1, 10))
-            
-            # Subtitle
-            subtitle_style = ParagraphStyle(
-                'Subtitle',
-                parent=styles['Heading2'],
-                fontSize=14,
-                textColor=colors.HexColor('#2c3e50'),
-                alignment=1,
-                spaceAfter=15
-            )
-            story.append(Paragraph("Team & Player Distribution with Bid Amounts", subtitle_style))
-            story.append(Spacer(1, 10))
-            
-            # Host info
-            host_name = game.get('host_name', 'Unknown')
-            host_id = game.get('host_id', 0)
-            date_str = current_time.strftime('%B %d, %Y at %H:%M')
-            
-            host_style = ParagraphStyle(
-                'HostStyle',
-                parent=styles['Normal'],
-                fontSize=11,
-                textColor=colors.HexColor('#555'),
-                alignment=1,
-                spaceAfter=20
-            )
-            story.append(Paragraph(f"Host: {host_name} | Date: {date_str}", host_style))
-            story.append(Spacer(1, 15))
-            
-            # Team Distribution heading
-            team_heading_style = ParagraphStyle(
-                'TeamHeading',
-                parent=styles['Heading3'],
-                fontSize=16,
-                textColor=colors.HexColor('#e67e22'),
-                alignment=0,
-                spaceAfter=10
-            )
-            story.append(Paragraph("TEAM DISTRIBUTION", team_heading_style))
-            story.append(Spacer(1, 10))
-            
-            # Create team distribution table
-            players = game.get("players", [])
-            sold_players_list = game.get("sold_players", [])
-            
-            # Group sold players by captain
-            captain_players = {}
-            unsold_players = []
-            
-            for p in sold_players_list:
-                captain_id = p.get("captain_id", 0)
-                captain_name = p.get("captain_name", "Unknown")
-                if captain_id not in captain_players:
-                    captain_players[captain_id] = {"name": captain_name, "players": [], "total_spent": 0}
-                captain_players[captain_id]["players"].append(p)
-                captain_players[captain_id]["total_spent"] += p.get("bid", 0)
-            
-            # Check unsold players
-            all_player_ids = [p.get("id") for p in players]
-            sold_player_ids = [p.get("id") for p in sold_players_list]
-            unsold_player_ids = [pid for pid in all_player_ids if pid not in sold_player_ids]
-            
-            for pid in unsold_player_ids:
-                for p in players:
-                    if p.get("id") == pid:
-                        unsold_players.append(p)
-                        break
-            
-            # Team table
-            if captain_players:
-                for captain_id, data in captain_players.items():
-                    story.append(Paragraph(f"<b>Captain: {data['name']}</b>", styles['Normal']))
-                    story.append(Spacer(1, 5))
-                    
-                    team_data = [["Player Name", "Bid Amount"]]
-                    for player in data["players"]:
-                        team_data.append([player.get("name", "Unknown"), f"${player.get('bid', 0)}"])
-                    
-                    team_table = Table(team_data, colWidths=[4*inch, 1.5*inch])
-                    team_table.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (0, 0), (-1, 0), 10),
-                        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-                    ]))
-                    story.append(team_table)
-                    story.append(Spacer(1, 15))
-            else:
-                story.append(Paragraph("No teams formed yet.", styles['Normal']))
-                story.append(Spacer(1, 10))
-            
-            # UNSOLD PLAYERS section
-            story.append(Paragraph("UNSOLD PLAYERS", team_heading_style))
-            story.append(Spacer(1, 10))
-            
-            if unsold_players:
-                unsold_data = [["Player Name"]]
-                for p in unsold_players:
-                    unsold_data.append([p.get("name", "Unknown")])
-                
-                unsold_table = Table(unsold_data, colWidths=[5.5*inch])
-                unsold_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e74c3c')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f9ebea')),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-                ]))
-                story.append(unsold_table)
-            else:
-                story.append(Paragraph("All players were sold - no unsold players!", styles['Normal']))
-            
-            story.append(Spacer(1, 30))
-            
-            # Footer
-            footer_style = ParagraphStyle(
-                'Footer',
-                parent=styles['Normal'],
-                fontSize=10,
-                textColor=colors.grey,
-                alignment=1,
-                spaceAfter=20
-            )
-            story.append(Paragraph("Thanks for using the Cricket Auction Bot! | Solo Tree Community", footer_style))
-            
-            doc.build(story)
-            pdf_bytes.seek(0)
-            
-            await client.send_document(
-                chat_id,
-                pdf_bytes,
-                caption=f"🏏 Cricket Auction Result 🏏\n\nTeam & Player Distribution with Claim Amounts\nHost: [{game.get('host_name', 'Unknown')}](tg://user?id={game.get('host_id', 0)})\n\nThanks for using the bot!",
-                disable_web_page_preview=True
-            )
-        except Exception as e:
-            print(f"PDF generation error: {e}")
-            await client.send_message(
-                chat_id,
-                f"🏏 Cricket Auction Result 🏏\n\nTeam & Player Distribution with Claim Amounts\nHost: [{game.get('host_name', 'Unknown')}](tg://user?id={game.get('host_id', 0)})\n\nThanks for using the bot!"
-            )
-        
-        # Clean up
-        if chat_id in auction_games:
-            del auction_games[chat_id]
-        if chat_id in auction_hosts:
-            del auction_hosts[chat_id]
-        
-        await callback.answer("✅ Auction ended!")
-
-    # ================= END AUCTION CANCEL =================
-    @app.on_callback_query(filters.regex("^end_auction_cancel$"))
-    async def end_auction_cancel_callback(client, callback):
-        await callback.message.delete()
-        await callback.answer("❌ Auction end cancelled!")
