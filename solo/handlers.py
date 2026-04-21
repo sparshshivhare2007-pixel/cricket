@@ -357,7 +357,7 @@ Who will be the game host for this match? 🤔"""
         
         await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team B!")
 
-    # ================= TEAM B TIMER =================
+        # ================= TEAM B TIMER =================
     async def team_b_timer(client, chat_id):
         await asyncio.sleep(50)
         game = team_games.get(chat_id)
@@ -365,9 +365,6 @@ Who will be the game host for this match? 🤔"""
             game["status"] = "captain_selection"
             await client.send_message(
                 chat_id,
-                f"✅ Teams are complete!\n\n"
-                f"🏏 Team A: {len(game['team_a'])} players\n"
-                f"🏏 Team B: {len(game['team_b'])} players\n\n"
                 f"👋 Hey, now members are joined the teams! 🎉 Choose Team captains user /choose_cap 📝"
             )
 
