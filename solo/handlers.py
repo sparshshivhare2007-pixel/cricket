@@ -214,7 +214,7 @@ Who will be the game host for this match? 🤔"""
             await client.send_message(chat_id, caption, reply_markup=keyboard)
         await callback.answer()
 
-    # ================= BECOME HOST =================
+        # ================= BECOME HOST =================
     @app.on_callback_query(filters.regex("^team_become_host$"))
     async def team_become_host(client, callback):
         chat_id = callback.message.chat.id
@@ -264,21 +264,14 @@ Who will be the game host for this match? 🤔"""
         
         await callback.message.delete()
         
-        # TEAM IMAGE with caption
-        try:
-            await client.send_photo(
-                chat_id,
-                TEAM_CHAPU_IMG,  # config mein TEAM_CHAPU_IMG = "your_image_url"
-                caption="🏏 **Team Mode Activated!** 🏏\n\nUse /create_team to start creating teams!"
-            )
-        except:
-            await client.send_message(
-                chat_id,
-                "🏏 **Team Mode Activated!** 🏏\n\nUse /create_team to start creating teams!"
-            )
+        # Clickable name wala caption
+        await client.send_message(
+            chat_id,
+            f"[{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏"
+        )
         
         await callback.answer()
-
+        
     # ================= CREATE TEAM COMMAND =================
     @app.on_message(filters.command("create_team") & filters.group)
     async def create_team_cmd(client, message):
