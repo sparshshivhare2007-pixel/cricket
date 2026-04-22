@@ -731,7 +731,7 @@ Who will be the game host for this match? 🤔"""
         
         game["status"] = "toss"
 
-    # ================= TOSS CALLBACK =================
+        # ================= TOSS CALLBACK =================
     @app.on_callback_query(filters.regex("^toss_"))
     async def toss_callback(client, callback):
         chat_id = callback.message.chat.id
@@ -742,55 +742,71 @@ Who will be the game host for this match? 🤔"""
             await callback.answer("❌ No toss in progress!", show_alert=True)
             return
         
+        # Only Team A captain can do toss
         if game["captain_a"]["id"] != user_id:
             await callback.answer("❌ Only Team A captain can do the toss!", show_alert=True)
             return
         
-        choice = callback.data.split("_")[1]
+        choice = callback.data.split("_")[1]  # "heads" or "tails"
         toss_result = random.choice(["heads", "tails"])
         
+        cap_a_id = game['captain_a']['id']
         cap_a_name = game['captain_a']['name']
+        cap_a_username = game['captain_a'].get('username')
+        cap_a_display = f"@{cap_a_username}" if cap_a_username else cap_a_name
+        
+        cap_b_id = game['captain_b']['id']
         cap_b_name = game['captain_b']['name']
+        cap_b_username = game['captain_b'].get('username')
+        cap_b_display = f"@{cap_b_username}" if cap_b_username else cap_b_name
         
         toss_video_url = TOSS_VIDEO
         
         await callback.message.delete()
         
-        if choice == toss_result:
-            winner = "A"
-            winner_name = cap_a_name
-            
-            await client.send_video(
-                chat_id,
-                toss_video_url,
-                caption=f"🪙 The coin shows: {toss_result.upper()}!\n\n"
-                        f"🅰️ - {cap_a_name} chose {choice.upper()}\n"
-                        f"🅱️ {cap_b_name} got {toss_result.upper()}\n\n"
-                        f"🏆 - {winner_name} from Team A won the toss!\n\n"
-                        f"🏆 - {winner_name}, please choose to Bat or Bowl:"
-            )
-        else:
-            winner = "B"
-            winner_name = cap_b_name
-            
-            await client.send_video(
-                chat_id,
-                toss_video_url,
-                caption=f"🪙 The coin shows: {toss_result.upper()}!\n\n"
-                        f"🅰️ - {cap_a_name} chose {choice.upper()}\n"
-                        f"🅱️ {cap_b_name} got {toss_result.upper()}\n\n"
-                        f"🏆 - {winner_name} from Team B won the toss!\n\n"
-                        f"🏆 - {winner_name}, please choose to Bat or Bowl:"
-            )
+        # Make names clickable
+        cap_a_clickable = f"[{cap_a_display}](tg://user?id={cap_a_id})"
+        cap_b_clickable = f"[{cap_b_display}](tg://user?id={cap_b_id})"
         
+        if choice == toss_result:
+            winner_id = cap_a_id
+            winner_name = cap_a_display
+            winner_clickable = cap_a_clickable
+            winner_team = "A"
+            
+            caption_text = f"🪙 The coin shows: {toss_result.upper()}!\n\n"
+            caption_text += f"🅰️ - {cap_a_clickable} chose {choice.upper()}\n"
+            caption_text += f"🅱️ {cap_b_clickable} got {toss_result.upper()}\n\n"
+            caption_text += f"🏆 {winner_clickable} from Team {winner_team} won the toss!\n\n"
+            caption_text += f"🏆 {winner_clickable}, please choose to Bat or Bowl:"
+        else:
+            winner_id = cap_b_id
+            winner_name = cap_b_display
+            winner_clickable = cap_b_clickable
+            winner_team = "B"
+            
+            caption_text = f"🪙 The coin shows: {toss_result.upper()}!\n\n"
+            caption_text += f"🅰️ - {cap_a_clickable} chose {choice.upper()}\n"
+            caption_text += f"🅱️ {cap_b_clickable} got {toss_result.upper()}\n\n"
+            caption_text += f"🏆 {winner_clickable} from Team {winner_team} won the toss!\n\n"
+            caption_text += f"🏆 {winner_clickable}, please choose to Bat or Bowl:"
+        
+        # Decision buttons
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🏏 BAT FIRST", callback_data="toss_bat")],
             [InlineKeyboardButton("⚾ BOWL FIRST", callback_data="toss_bowl")]
         ])
         
-        await client.send_message(chat_id, "Choose your option:", reply_markup=keyboard)
-        game["toss_winner"] = winner
-
+        # Send video with caption and buttons together
+        await client.send_video(
+            chat_id,
+            toss_video_url,
+            caption=caption_text,
+            reply_markup=keyboard
+        )
+        
+        game["toss_winner"] = winner_team
+        
     # ================= TOSS DECISION =================
     @app.on_callback_query(filters.regex("^toss_bat$|^toss_bowl$"))
     async def toss_decision_callback(client, callback):
