@@ -379,7 +379,7 @@ Who will be the game host for this match? 🤔"""
                 f"👋 Hey, now members are joined the teams! 🎉 Choose Team captains user /choose_cap 📝"
             )
 
-        # ================= CHOOSE CAPTAIN COMMAND =================
+           # ================= CHOOSE CAPTAIN COMMAND =================
     @app.on_message(filters.command("choose_cap") & filters.group)
     async def choose_cap_cmd(client, message):
         chat_id = message.chat.id
@@ -402,7 +402,7 @@ Who will be the game host for this match? 🤔"""
             await message.reply("❌ Captains already selected!")
             return
         
-        # Sirf 2 buttons - player names nahi dikhenge
+        # Sirf 2 buttons - no cancel button
         buttons = []
         if user_in_team_a and not game.get("captain_a"):
             buttons.append([InlineKeyboardButton("🏏 Choose Team A Captain 🏏", callback_data=f"choose_cap_a_{user_id}")])
@@ -410,7 +410,7 @@ Who will be the game host for this match? 🤔"""
             buttons.append([InlineKeyboardButton("🏏 Choose Team B Captain 🏏", callback_data=f"choose_cap_b_{user_id}")])
         
         if not buttons:
-            await message.reply("❌ Your team's captain already selected or you cannot become captain!")
+            await message.reply("❌ Your team's captain already selected!")
             return
         
         keyboard = InlineKeyboardMarkup(buttons)
