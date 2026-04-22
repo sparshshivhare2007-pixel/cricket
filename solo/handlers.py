@@ -379,7 +379,7 @@ Who will be the game host for this match? 🤔"""
                 f"👋 Hey, now members are joined the teams! 🎉 Choose Team captains user /choose_cap 📝"
             )
 
-    # ================= CHOOSE CAPTAIN COMMAND =================
+        # ================= CHOOSE CAPTAIN COMMAND =================
     @app.on_message(filters.command("choose_cap") & filters.group)
     async def choose_cap_cmd(client, message):
         chat_id = message.chat.id
@@ -390,16 +390,11 @@ Who will be the game host for this match? 🤔"""
             await message.reply("❌ No active game found!")
             return
         
-        # Check if user is HOST
-        host = team_hosts.get(chat_id)
-        is_host = host and host["id"] == user_id
-        
         # Check if user is in Team A or Team B
         user_in_team_a = any(p["id"] == user_id for p in game["team_a"])
         user_in_team_b = any(p["id"] == user_id for p in game["team_b"])
         
-        # If not host and not in any team
-        if not is_host and not user_in_team_a and not user_in_team_b:
+        if not user_in_team_a and not user_in_team_b:
             await message.reply("❌ You are not in any team! Join a team first using /join_teamA or /join_teamB")
             return
         
@@ -407,56 +402,107 @@ Who will be the game host for this match? 🤔"""
             await message.reply("❌ Captains already selected!")
             return
         
-        # For HOST - show all players from both teams
-        if is_host:
-            team_a_buttons = []
-            for player in game["team_a"]:
-                display_name = f"@{player['username']}" if player['username'] else player['name']
-                team_a_buttons.append([InlineKeyboardButton(f"👑 Team A: {display_name}", callback_data=f"cap_a_{player['id']}")])
-            
-            team_b_buttons = []
-            for player in game["team_b"]:
-                display_name = f"@{player['username']}" if player['username'] else player['name']
-                team_b_buttons.append([InlineKeyboardButton(f"👑 Team B: {display_name}", callback_data=f"cap_b_{player['id']}")])
-            
-            if not team_a_buttons:
-                team_a_buttons = [[InlineKeyboardButton("❌ No players in Team A", callback_data="noop")]]
-            if not team_b_buttons:
-                team_b_buttons = [[InlineKeyboardButton("❌ No players in Team B", callback_data="noop")]]
-            
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🏏 TEAM A CAPTAIN 🏏", callback_data="noop")],
-                *team_a_buttons,
-                [InlineKeyboardButton("🏏 TEAM B CAPTAIN 🏏", callback_data="noop")],
-                *team_b_buttons,
-                [InlineKeyboardButton("❌ Cancel", callback_data="cap_cancel")]
-            ])
-            
-            await message.reply(
-                "🏏 **Game Host, please choose captains for Team A and Team B:**\n\n"
-                "Click on a player name to make them captain of their respective team.",
-                reply_markup=keyboard
-            )
+        # Sirf 2 buttons - player names nahi dikhenge
+        buttons = []
+        if user_in_team_a and not game.get("captain_a"):
+            buttons.append([InlineKeyboardButton("🏏 Choose Team A Captain 🏏", callback_data=f"choose_cap_a_{user_id}")])
+        if user_in_team_b and not game.get("captain_b"):
+            buttons.append([InlineKeyboardButton("🏏 Choose Team B Captain 🏏", callback_data=f"choose_cap_b_{user_id}")])
+        
+        if not buttons:
+            await message.reply("❌ Your team's captain already selected or you cannot become captain!")
+            return
+        
+        keyboard = InlineKeyboardMarkup(buttons)
+        
+        await message.reply(
+            "🏏 **Become Captain!** 🏏\n\n"
+            "Click on the button to become captain of your team.",
+            reply_markup=keyboard
+        )
+
+    # ================= CHOOSE CAPTAIN A =================
+    @app.on_callback_query(filters.regex("^choose_cap_a_"))
+    async def choose_cap_a_callback(client, callback):
+        chat_id = callback.message.chat.id
+        user_id = int(callback.data.split("_")[3])
+        
+        game = team_games.get(chat_id)
+        if not game:
+            await callback.answer("❌ No active game found!", show_alert=True)
+            return
+        
+        if game.get("captain_a"):
+            await callback.answer("❌ Team A captain already selected!", show_alert=True)
+            return
+        
+        # Check if user is in Team A
+        user_name = ""
+        for player in game["team_a"]:
+            if player["id"] == user_id:
+                user_name = player["name"]
+                game["captain_a"] = player
+                break
         else:
-            # For team members - they can become captain of their own team
-            buttons = []
-            if user_in_team_a and not game.get("captain_a"):
-                buttons.append([InlineKeyboardButton("🏏 Become Team A Captain 🏏", callback_data=f"become_cap_a_{user_id}")])
-            if user_in_team_b and not game.get("captain_b"):
-                buttons.append([InlineKeyboardButton("🏏 Become Team B Captain 🏏", callback_data=f"become_cap_b_{user_id}")])
-            
-            if not buttons:
-                await message.reply("❌ Your team's captain already selected or you cannot become captain!")
-                return
-            
-            keyboard = InlineKeyboardMarkup(buttons)
-            
-            await message.reply(
-                "🏏 **Become Captain!** 🏏\n\n"
-                "Click on the button to become captain of your team.",
-                reply_markup=keyboard
+            await callback.answer("❌ You are not in Team A!", show_alert=True)
+            return
+        
+        await callback.answer(f"✅ {user_name} is now Team A Captain!")
+        await callback.message.delete()
+        
+        # Check if both captains selected
+        if game.get("captain_a") and game.get("captain_b"):
+            await start_toss(client, chat_id)
+        else:
+            await client.send_message(
+                chat_id,
+                f"🏏 **Captains Selected!**\n\n"
+                f"✅ Team A Captain: {user_name}\n"
+                f"⚠️ Team B Captain: Not selected yet\n\n"
+                f"Waiting for Team B captain to select..."
             )
 
+    # ================= CHOOSE CAPTAIN B =================
+    @app.on_callback_query(filters.regex("^choose_cap_b_"))
+    async def choose_cap_b_callback(client, callback):
+        chat_id = callback.message.chat.id
+        user_id = int(callback.data.split("_")[3])
+        
+        game = team_games.get(chat_id)
+        if not game:
+            await callback.answer("❌ No active game found!", show_alert=True)
+            return
+        
+        if game.get("captain_b"):
+            await callback.answer("❌ Team B captain already selected!", show_alert=True)
+            return
+        
+        # Check if user is in Team B
+        user_name = ""
+        for player in game["team_b"]:
+            if player["id"] == user_id:
+                user_name = player["name"]
+                game["captain_b"] = player
+                break
+        else:
+            await callback.answer("❌ You are not in Team B!", show_alert=True)
+            return
+        
+        await callback.answer(f"✅ {user_name} is now Team B Captain!")
+        await callback.message.delete()
+        
+        # Check if both captains selected
+        if game.get("captain_a") and game.get("captain_b"):
+            await start_toss(client, chat_id)
+        else:
+            await client.send_message(
+                chat_id,
+                f"🏏 **Captains Selected!**\n\n"
+                f"⚠️ Team A Captain: Not selected yet\n"
+                f"✅ Team B Captain: {user_name}\n\n"
+                f"Waiting for Team A captain to select..."
+            )
+            
     # ================= CAPTAIN SELECTION BY HOST (A) =================
     @app.on_callback_query(filters.regex("^cap_a_"))
     async def cap_a_callback(client, callback):
