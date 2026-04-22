@@ -725,11 +725,7 @@ Who will be the game host for this match? 🤔"""
         
         await client.send_message(
             chat_id,
-            f"🎉 **Captains Selected!** 🎉\n\n"
-            f"🏏 Team A Captain: {cap_a_name}\n"
-            f"🏏 Team B Captain: {cap_b_name}\n\n"
-            f"🪙 **TOSS TIME!** 🪙\n\n"
-            f"{cap_a_name}, choose Heads or Tails:",
+            f"Team Captains, choose Heads or Tails:\n\n",
             reply_markup=keyboard
         )
         
