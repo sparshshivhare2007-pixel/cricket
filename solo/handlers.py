@@ -264,13 +264,20 @@ Who will be the game host for this match? 🤔"""
         
         await callback.message.delete()
         
-        # Clickable name wala caption
-        await client.send_message(
-            chat_id,
-            f"[{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏"
-        )
-        
-        await callback.answer()
+        # Image bhejo with caption
+        try:
+            await client.send_photo(
+                chat_id,
+                TEAM_CHAPU_IMG,
+                caption=f"[{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏"
+            )
+        except Exception as e:
+            print(f"Image send error: {e}")
+            # Agar image fail ho to sirf message bhejo
+            await client.send_message(
+                chat_id,
+                f"[{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏"
+            )
         
     # ================= CREATE TEAM COMMAND =================
     @app.on_message(filters.command("create_team") & filters.group)
