@@ -2,7 +2,8 @@
 
 from pyrogram import Client
 from config import BOT_TOKEN, API_ID, API_HASH
-from solo.handlers import register_handlers
+from solo.handlers import register_handlers as register_solo_handlers
+from team.handlers import register_handlers as register_team_handlers
 
 print("🚀 Starting Cricket Game Bot...")
 print(f"API_ID: {API_ID}")
@@ -15,10 +16,15 @@ app = Client(
     bot_token=BOT_TOKEN
 )
 
-print("📝 Registering Handlers...")
-register_handlers(app)
+print("📝 Registering Solo Mode Handlers...")
+register_solo_handlers(app)
+
+print("📝 Registering Team Mode Handlers...")
+register_team_handlers(app)
 
 print("✅ Bot Started Successfully!")
 print("🏏 Cricket Game Bot is now running...")
+print("   - Solo Mode: /start → Solo → Choose 1 or 3 ball")
+print("   - Team Mode: /start → Team → Become Host → /create_team")
 
 app.run()
