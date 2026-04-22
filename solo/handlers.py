@@ -731,7 +731,7 @@ Who will be the game host for this match? 🤔"""
         
         game["status"] = "toss"
 
-        # ================= TOSS CALLBACK =================
+            # ================= TOSS CALLBACK =================
     @app.on_callback_query(filters.regex("^toss_"))
     async def toss_callback(client, callback):
         chat_id = callback.message.chat.id
@@ -768,12 +768,14 @@ Who will be the game host for this match? 🤔"""
         cap_a_clickable = f"[{cap_a_display}](tg://user?id={cap_a_id})"
         cap_b_clickable = f"[{cap_b_display}](tg://user?id={cap_b_id})"
         
+        # Prepare caption based on result
         if choice == toss_result:
             winner_id = cap_a_id
             winner_name = cap_a_display
             winner_clickable = cap_a_clickable
             winner_team = "A"
             
+            # Full caption with video
             caption_text = f"🪙 The coin shows: {toss_result.upper()}!\n\n"
             caption_text += f"🅰️ - {cap_a_clickable} chose {choice.upper()}\n"
             caption_text += f"🅱️ {cap_b_clickable} got {toss_result.upper()}\n\n"
@@ -797,7 +799,7 @@ Who will be the game host for this match? 🤔"""
             [InlineKeyboardButton("⚾ BOWL FIRST", callback_data="toss_bowl")]
         ])
         
-        # Send video with caption and buttons together
+        # Send video with full caption and buttons
         await client.send_video(
             chat_id,
             toss_video_url,
@@ -807,64 +809,6 @@ Who will be the game host for this match? 🤔"""
         
         game["toss_winner"] = winner_team
         
-    # ================= TOSS DECISION =================
-    @app.on_callback_query(filters.regex("^toss_bat$|^toss_bowl$"))
-    async def toss_decision_callback(client, callback):
-        chat_id = callback.message.chat.id
-        user_id = callback.from_user.id
-        
-        game = team_games.get(chat_id)
-        if not game:
-            await callback.answer("❌ No active game found!", show_alert=True)
-            return
-        
-        decision = callback.data.split("_")[1]
-        toss_winner = game.get("toss_winner")
-        
-        if toss_winner == "A" and game["captain_a"]["id"] != user_id:
-            await callback.answer("❌ Only Team A captain can decide!", show_alert=True)
-            return
-        elif toss_winner == "B" and game["captain_b"]["id"] != user_id:
-            await callback.answer("❌ Only Team B captain can decide!", show_alert=True)
-            return
-        
-        game["toss_decision"] = decision
-        
-        if decision == "bat":
-            batting_team = toss_winner
-        else:
-            batting_team = "A" if toss_winner == "B" else "B"
-        
-        await callback.message.delete()
-        await select_overs(client, chat_id, batting_team)
-
-    # ================= SELECT OVERS =================
-    async def select_overs(client, chat_id, batting_team):
-        game = team_games.get(chat_id)
-        if not game:
-            return
-        
-        buttons = []
-        row = []
-        for i in range(1, 21):
-            row.append(InlineKeyboardButton(f"{i}", callback_data=f"over_{i}"))
-            if len(row) == 5:
-                buttons.append(row)
-                row = []
-        if row:
-            buttons.append(row)
-        
-        keyboard = InlineKeyboardMarkup(buttons)
-        
-        await client.send_message(
-            chat_id,
-            f"📊 **Select number of overs:**\n\nChoose overs (1 to 20 overs per side):",
-            reply_markup=keyboard
-        )
-        
-        game["status"] = "over_selection"
-        game["batting_first"] = batting_team
-
     # ================= OVER SELECTION CALLBACK =================
     @app.on_callback_query(filters.regex("^over_"))
     async def over_selection_callback(client, callback):
