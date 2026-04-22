@@ -379,47 +379,130 @@ Who will be the game host for this match? 🤔"""
                 f"👋 Hey, now members are joined the teams! 🎉 Choose Team captains user /choose_cap 📝"
             )
 
-           # ================= CHOOSE CAPTAIN COMMAND =================
+               # ================= CHOOSE CAPTAIN COMMAND =================
     @app.on_message(filters.command("choose_cap") & filters.group)
     async def choose_cap_cmd(client, message):
         chat_id = message.chat.id
         user_id = message.from_user.id
+        
+        # Sirf HOST hi /choose_cap command use kar sakta hai
+        host = team_hosts.get(chat_id)
+        if not host or host["id"] != user_id:
+            await message.reply("❌ Only game host can start captain selection!")
+            return
         
         game = team_games.get(chat_id)
         if not game:
             await message.reply("❌ No active game found!")
             return
         
-        # Check if user is in Team A or Team B
-        user_in_team_a = any(p["id"] == user_id for p in game["team_a"])
-        user_in_team_b = any(p["id"] == user_id for p in game["team_b"])
-        
-        if not user_in_team_a and not user_in_team_b:
-            await message.reply("❌ You are not in any team! Join a team first using /join_teamA or /join_teamB")
-            return
-        
         if game.get("captain_a") and game.get("captain_b"):
             await message.reply("❌ Captains already selected!")
             return
         
-        # Sirf 2 buttons - no cancel button
-        buttons = []
-        if user_in_team_a and not game.get("captain_a"):
-            buttons.append([InlineKeyboardButton("🏏 Choose Team A Captain 🏏", callback_data=f"choose_cap_a_{user_id}")])
-        if user_in_team_b and not game.get("captain_b"):
-            buttons.append([InlineKeyboardButton("🏏 Choose Team B Captain 🏏", callback_data=f"choose_cap_b_{user_id}")])
-        
-        if not buttons:
-            await message.reply("❌ Your team's captain already selected!")
-            return
-        
-        keyboard = InlineKeyboardMarkup(buttons)
+        # Sirf 2 buttons - members click karenge
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🏏 Choose Team A Captain 🏏", callback_data="choose_cap_a")],
+            [InlineKeyboardButton("🏏 Choose Team B Captain 🏏", callback_data="choose_cap_b")]
+        ])
         
         await message.reply(
-            "🏏 **Become Captain!** 🏏\n\n"
-            "Click on the button to become captain of your team.",
+            "🏏 **Captain Selection!** 🏏\n\n"
+            "Team A members click 'Team A Captain' button to become captain.\n"
+            "Team B members click 'Team B Captain' button to become captain.\n\n"
+            "Click on your team's button!",
             reply_markup=keyboard
         )
+
+    # ================= CHOOSE CAPTAIN A (Members click karenge) =================
+    @app.on_callback_query(filters.regex("^choose_cap_a$"))
+    async def choose_cap_a_callback(client, callback):
+        chat_id = callback.message.chat.id
+        user_id = callback.from_user.id
+        
+        game = team_games.get(chat_id)
+        if not game:
+            await callback.answer("❌ No active game found!", show_alert=True)
+            return
+        
+        if game.get("captain_a"):
+            await callback.answer("❌ Team A captain already selected!", show_alert=True)
+            return
+        
+        # Check if user is in Team A
+        user_name = ""
+        for player in game["team_a"]:
+            if player["id"] == user_id:
+                user_name = player["name"]
+                game["captain_a"] = player
+                break
+        else:
+            await callback.answer("❌ You are not in Team A!", show_alert=True)
+            return
+        
+        await callback.answer(f"✅ {user_name} is now Team A Captain!")
+        
+        # Check if both captains selected
+        if game.get("captain_a") and game.get("captain_b"):
+            await callback.message.delete()
+            await start_toss(client, chat_id)
+        else:
+            # Team A button gayab karo, sirf Team B button rahega
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🏏 Choose Team B Captain 🏏", callback_data="choose_cap_b")]
+            ])
+            await callback.message.edit_text(
+                f"🏏 **Captain Selection!** 🏏\n\n"
+                f"✅ Team A Captain: {user_name}\n"
+                f"⚠️ Team B Captain: Not selected yet\n\n"
+                f"Team B members click 'Team B Captain' button to become captain.",
+                reply_markup=keyboard
+            )
+
+    # ================= CHOOSE CAPTAIN B (Members click karenge) =================
+    @app.on_callback_query(filters.regex("^choose_cap_b$"))
+    async def choose_cap_b_callback(client, callback):
+        chat_id = callback.message.chat.id
+        user_id = callback.from_user.id
+        
+        game = team_games.get(chat_id)
+        if not game:
+            await callback.answer("❌ No active game found!", show_alert=True)
+            return
+        
+        if game.get("captain_b"):
+            await callback.answer("❌ Team B captain already selected!", show_alert=True)
+            return
+        
+        # Check if user is in Team B
+        user_name = ""
+        for player in game["team_b"]:
+            if player["id"] == user_id:
+                user_name = player["name"]
+                game["captain_b"] = player
+                break
+        else:
+            await callback.answer("❌ You are not in Team B!", show_alert=True)
+            return
+        
+        await callback.answer(f"✅ {user_name} is now Team B Captain!")
+        
+        # Check if both captains selected
+        if game.get("captain_a") and game.get("captain_b"):
+            await callback.message.delete()
+            await start_toss(client, chat_id)
+        else:
+            # Team B button gayab karo, sirf Team A button rahega
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🏏 Choose Team A Captain 🏏", callback_data="choose_cap_a")]
+            ])
+            await callback.message.edit_text(
+                f"🏏 **Captain Selection!** 🏏\n\n"
+                f"⚠️ Team A Captain: Not selected yet\n"
+                f"✅ Team B Captain: {user_name}\n\n"
+                f"Team A members click 'Team A Captain' button to become captain.",
+                reply_markup=keyboard
+            )
 
     # ================= CHOOSE CAPTAIN A =================
     @app.on_callback_query(filters.regex("^choose_cap_a_"))
