@@ -412,15 +412,12 @@ Who will be the game host for this match? 🤔"""
         
         # Sirf 2 buttons - members click karenge
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🏏 Choose Team A Captain 🏏", callback_data="choose_cap_a")],
-            [InlineKeyboardButton("🏏 Choose Team B Captain 🏏", callback_data="choose_cap_b")]
+            [InlineKeyboardButton("🏆 Choose Team A Captain ", callback_data="choose_cap_a")],
+            [InlineKeyboardButton("🏆 Choose Team B Captain ", callback_data="choose_cap_b")]
         ])
         
         await message.reply(
-            "🏏 **Captain Selection!** 🏏\n\n"
-            "Team A members click 'Team A Captain' button to become captain.\n"
-            "Team B members click 'Team B Captain' button to become captain.\n\n"
-            "Click on your team's button!",
+             "**Game Host, please choose captains for Team A and Team B:**\n\n",
             reply_markup=keyboard
         )
 
