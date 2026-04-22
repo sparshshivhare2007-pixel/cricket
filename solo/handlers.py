@@ -31,7 +31,7 @@ async def is_admin(client, chat_id, user_id):
         return False
 
 
-# ================= SOLO MODE TIMEOUT =================
+# ================= SOLO MODE TIMEOUT (No Bowler Change) =================
 async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, message_id):
     await asyncio.sleep(30)
     game = games.get(chat_id)
@@ -90,12 +90,13 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
             game["current_bowler_balls"] += 1
             game["total_balls_in_match"] += 1
             
-            ball_mode = game.get("ball_mode", 3)
-            if game["current_bowler_balls"] >= ball_mode:
-                new_bowler_index = (game["current_bowler_index"] + 1) % len(game["players"])
-                game["current_bowler_index"] = new_bowler_index
-                game["current_bowler"] = game["players"][new_bowler_index].copy()
-                game["current_bowler_balls"] = 0
+            # ❌ BOWLER CHANGE DISABLED - Same bowler continues
+            # ball_mode = game.get("ball_mode", 3)
+            # if game["current_bowler_balls"] >= ball_mode:
+            #     new_bowler_index = (game["current_bowler_index"] + 1) % len(game["players"])
+            #     game["current_bowler_index"] = new_bowler_index
+            #     game["current_bowler"] = game["players"][new_bowler_index].copy()
+            #     game["current_bowler_balls"] = 0
             
             await send_bowling_video(client, chat_id, game["current_bowler"])
     
@@ -1348,13 +1349,8 @@ Who will be the game host for this match? 🤔"""
                         bat=bat, bowler=bowler["name"], bowl=bow))
                 
                 if not game.get("game_over"):
-                    if game["current_bowler_balls"] >= ball_mode:
-                        await message.reply(build_scoreboard(game["players"], is_final=False))
-                        new_bowler = game["current_bowler"]
-                        await client.send_message(chat_id, f"🔄 Bowler changed! Now bowling: [{new_bowler['name']}](tg://user?id={new_bowler['id']})")
-                        await send_bowling_video(client, chat_id, new_bowler)
-                    else:
-                        await send_bowling_video(client, chat_id, bowler)
+                    # ✅ BOWLER CHANGE DISABLED - Same bowler continues
+                    await send_bowling_video(client, chat_id, bowler)
             return
         
         # Check team mode
