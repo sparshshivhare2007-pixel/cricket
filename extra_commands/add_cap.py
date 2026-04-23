@@ -43,4 +43,34 @@ def register_add_cap(app):
                 team = "A"
                 break
         for player in team_game["team_b"]:
-            if player["id"] == new
+            if player["id"] == new_captain.id:
+                team = "B"
+                break
+        
+        if not team:
+            await message.reply(f"❌ {new_captain.first_name} is not in any team!")
+            return
+        
+        # Check if captain already exists
+        if team == "A" and team_game.get("captain_a"):
+            await message.reply(f"❌ Team A already has a captain! Use /cap_change to change.")
+            return
+        elif team == "B" and team_game.get("captain_b"):
+            await message.reply(f"❌ Team B already has a captain! Use /cap_change to change.")
+            return
+        
+        # Add captain
+        if team == "A":
+            team_game["captain_a"] = {
+                "id": new_captain.id,
+                "name": new_captain.first_name,
+                "username": new_captain.username
+            }
+        else:
+            team_game["captain_b"] = {
+                "id": new_captain.id,
+                "name": new_captain.first_name,
+                "username": new_captain.username
+            }
+        
+        await message.reply(f"✅ {new_captain.first_name} is now Team {team} Captain!")
