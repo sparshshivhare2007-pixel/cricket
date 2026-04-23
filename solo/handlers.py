@@ -65,6 +65,7 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
         current_bowler = game.get("current_bowler", {})
         if current_bowler.get("id") == user_id and game.get("bowling_number") is None:
             
+            # Penalty: -6 runs from bowler's score
             for player in game["players"]:
                 if player["id"] == user_id:
                     player["score"] -= 6
@@ -75,13 +76,13 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
                 await client.send_video(
                     chat_id,
                     get_run_video(6),
-                    caption=f"No message received from bowler, deducting 6 runs of bowler."
+                    caption=f"No message received from bowler, deducting 6 runs from {bowler_name}'s score."
                 )
             except Exception as e:
                 print(f"Error sending 6 run video: {e}")
                 await client.send_message(
                     chat_id,
-                    f"No message received from bowler, deducting 6 runs of bowler."
+                    f"No message received from bowler, deducting 6 runs from {bowler_name}'s score."
                 )
             
             await client.send_message(chat_id, build_scoreboard(game["players"], is_final=False))
@@ -90,14 +91,8 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
             game["current_bowler_balls"] += 1
             game["total_balls_in_match"] += 1
             
-            # ❌ BOWLER CHANGE DISABLED - Same bowler continues
-            # ball_mode = game.get("ball_mode", 3)
-            # if game["current_bowler_balls"] >= ball_mode:
-            #     new_bowler_index = (game["current_bowler_index"] + 1) % len(game["players"])
-            #     game["current_bowler_index"] = new_bowler_index
-            #     game["current_bowler"] = game["players"][new_bowler_index].copy()
-            #     game["current_bowler_balls"] = 0
-            
+            # ✅ SAME BOWLER CONTINUES - No bowler change
+            # Just send bowling video again to the same bowler
             await send_bowling_video(client, chat_id, game["current_bowler"])
     
     if chat_id in bowling_tasks:
@@ -166,6 +161,7 @@ async def bowling_timeout_with_warnings_team(client, chat_id, user_id, bowler_na
             game["current_bowler_balls"] += 1
             game["total_balls_in_inning"] += 1
             
+            # Team mode: bowler changes after 6 balls
             if game["current_bowler_balls"] >= 6:
                 players = game[team_key]
                 new_bowler_index = (game["current_bowler_index"] + 1) % len(players)
@@ -1349,7 +1345,7 @@ Who will be the game host for this match? 🤔"""
                         bat=bat, bowler=bowler["name"], bowl=bow))
                 
                 if not game.get("game_over"):
-                    # ✅ BOWLER CHANGE DISABLED - Same bowler continues
+                    # ✅ SAME BOWLER CONTINUES - No bowler change in solo mode
                     await send_bowling_video(client, chat_id, bowler)
             return
         
