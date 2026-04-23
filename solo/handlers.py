@@ -444,9 +444,9 @@ def register_handlers(app):
             # Fallback - send without image and without HTML
             await message.reply(stats_text.replace(user_mention, f"@{username}" if username else name))
     
-# ================= USER RANKS COMMAND =================
-@app.on_message(filters.command("user_ranks") & filters.group)
-async def user_ranks_cmd(client, message: Message):
+    # ================= USER RANKS COMMAND =================
+    @app.on_message(filters.command("user_ranks") & filters.group)
+    async def user_ranks_cmd(client, message: Message):
     from pyrogram.enums import ParseMode
     from database import get_or_create_user
     
