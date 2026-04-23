@@ -116,7 +116,6 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
                     player["history"].append("-6")
                     break
             
-            # Penalty video with caption
             try:
                 await client.send_video(
                     chat_id,
@@ -136,7 +135,6 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
             game["current_bowler_balls"] += 1
             game["total_balls_in_match"] += 1
             
-            # Same bowler continues
             await send_bowling_video(client, chat_id, game["current_bowler"])
     
     if chat_id in bowling_tasks:
@@ -249,7 +247,6 @@ async def bowling_timeout_with_warnings_team(client, chat_id, user_id, bowler_na
             game["current_bowler_balls"] += 1
             game["total_balls_in_inning"] += 1
             
-            # Team mode: bowler changes after 6 balls
             if game["current_bowler_balls"] >= 6:
                 players = game[team_key]
                 new_bowler_index = (game["current_bowler_index"] + 1) % len(players)
@@ -300,6 +297,668 @@ def register_handlers(app):
     async def score_cmd(client, message: Message):
         await get_live_score(client, message)
 
+    # ================= HELP COMMAND =================
+    @app.on_message(filters.command("help") & filters.group)
+    async def help_cmd(client, message: Message):
+        help_text = """🏏 **Cricket Game Bot Commands** 🏏
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          🎮 GAME MODES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**SOLO MODE:**
+/start - Start game (Admin) or Vote (Member)
+/joingame - Join solo game (min 4 players)
+/score - Check live score
+/end_match - End current match (Admin)
+/solo_leave - Leave solo game
+
+**TEAM MODE:**
+/create_team - Create teams (Host only)
+/join_teamA - Join Team A
+/join_teamB - Join Team B
+/choose_cap - Choose team captains (Host)
+/add_A @user - Add player to Team A
+/add_B @user - Add player to Team B
+/shift_Team - Shift player between teams
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          📊 EXTRA COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/user_info - Get your user information
+/user_ranks - View player rankings
+/member_lists - View group members list
+/startgame - Start new game (Admin)
+/matches - View active matches
+/live_matches - View live match updates
+/host_change @user - Change game host
+/full_score - View complete scorecard
+/report_user @user - Report a user
+/report_stats - View report statistics (Admin)
+/batting <pos> - Change batting order (Captain)
+/bowling <pos> - Change bowling order (Captain)
+/cap_change @user - Change team captain (Host)
+/add_cap @user - Add a captain (Host)
+/rm_cap @user - Remove a captain (Host)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          ℹ️ INFO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• Solo mode requires minimum 4 players
+• 3 balls per bowler in solo mode
+• 6 balls per over in team mode
+• Bot must be admin in group
+
+🏏 **Enjoy the game!** 🏏"""
+        
+        await message.reply(help_text)
+
+    # ================= USER INFO COMMAND =================
+    @app.on_message(filters.command("user_info") & filters.group)
+    async def user_info_cmd(client, message: Message):
+        user = message.from_user
+        text = f"""👤 **User Information**
+
+🆔 **User ID:** `{user.id}`
+📛 **First Name:** {user.first_name}
+🏷️ **Last Name:** {user.last_name if user.last_name else 'N/A'}
+📝 **Username:** @{user.username if user.username else 'N/A'}
+📅 **Date:** {datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')}"""
+        
+        await message.reply(text)
+
+    # ================= USER RANKS COMMAND =================
+    @app.on_message(filters.command("user_ranks") & filters.group)
+    async def user_ranks_cmd(client, message: Message):
+        chat_id = message.chat.id
+        solo_game = games.get(chat_id)
+        team_game = team_games.get(chat_id)
+        
+        if not solo_game and not team_game:
+            await message.reply("❌ No active game found!")
+            return
+        
+        rank_text = "🏆 **Player Ranks** 🏆\n\n"
+        
+        if solo_game and solo_game.get("players"):
+            players = solo_game["players"]
+            sorted_players = sorted(players, key=lambda x: x.get("score", 0), reverse=True)
+            
+            for i, p in enumerate(sorted_players, 1):
+                name = f"@{p['username']}" if p.get('username') else p['name']
+                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📌"
+                rank_text += f"{medal} {i}. {name} - {p.get('score', 0)} runs\n"
+        
+        if team_game:
+            rank_text += "\n**TEAM A:**\n"
+            team_a_players = sorted(team_game.get("team_a", []), key=lambda x: x.get("score", 0), reverse=True)
+            for i, p in enumerate(team_a_players, 1):
+                name = f"@{p['username']}" if p.get('username') else p['name']
+                rank_text += f"   {i}. {name} - {p.get('score', 0)} runs\n"
+            
+            rank_text += "\n**TEAM B:**\n"
+            team_b_players = sorted(team_game.get("team_b", []), key=lambda x: x.get("score", 0), reverse=True)
+            for i, p in enumerate(team_b_players, 1):
+                name = f"@{p['username']}" if p.get('username') else p['name']
+                rank_text += f"   {i}. {name} - {p.get('score', 0)} runs\n"
+        
+        await message.reply(rank_text)
+
+    # ================= MEMBER LISTS COMMAND =================
+    @app.on_message(filters.command("member_lists") & filters.group)
+    async def member_lists_cmd(client, message: Message):
+        chat_id = message.chat.id
+        
+        try:
+            total = 0
+            admins = []
+            members = []
+            bots = []
+            
+            async for m in client.get_chat_members(chat_id):
+                total += 1
+                if m.user.is_bot:
+                    bots.append(m.user.first_name)
+                elif m.status.value in ['administrator', 'creator']:
+                    admins.append(f"@{m.user.username}" if m.user.username else m.user.first_name)
+                else:
+                    members.append(f"@{m.user.username}" if m.user.username else m.user.first_name)
+            
+            text = f"📊 **Group Members**\n\n"
+            text += f"👥 Total Members: {total}\n"
+            text += f"👑 Admins: {len(admins)}\n"
+            text += f"👤 Members: {len(members)}\n"
+            text += f"🤖 Bots: {len(bots)}\n\n"
+            
+            if admins:
+                text += "**👑 Admins:**\n" + "\n".join(admins[:10]) + "\n\n"
+            if members:
+                text += "**👤 Members (First 10):**\n" + "\n".join(members[:10]) + "\n\n"
+            if bots:
+                text += "**🤖 Bots:**\n" + "\n".join(bots)
+            
+            await message.reply(text)
+        except Exception as e:
+            await message.reply(f"❌ Error: {e}")
+
+    # ================= STARTGAME COMMAND =================
+    @app.on_message(filters.command("startgame") & filters.group)
+    async def startgame_cmd(client, message: Message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        
+        if not await is_admin(client, chat_id, user_id):
+            await message.reply("❌ Only admins can use /startgame!")
+            return
+        
+        if games.get(chat_id):
+            await message.reply("❌ A game is already active in this group!")
+            return
+        
+        create_game(chat_id)
+        await select_game_menu(client, message)
+
+    # ================= MATCHES COMMAND =================
+    @app.on_message(filters.command("matches") & filters.group)
+    async def matches_cmd(client, message: Message):
+        chat_id = message.chat.id
+        solo_game = games.get(chat_id)
+        team_game = team_games.get(chat_id)
+        
+        if not solo_game and not team_game:
+            await message.reply("❌ No active matches in this group!")
+            return
+        
+        matches_text = "🏏 **Active Matches** 🏏\n\n"
+        
+        if solo_game:
+            status = solo_game.get("status", "unknown")
+            players_count = len(solo_game.get("players", []))
+            matches_text += f"**SOLO MODE**\n"
+            matches_text += f"📊 Status: {status.upper()}\n"
+            matches_text += f"👥 Players: {players_count}\n"
+            matches_text += f"🎯 Ball Mode: {solo_game.get('ball_mode', 3)} balls\n\n"
+        
+        if team_game:
+            status = team_game.get("status", "unknown")
+            team_a_count = len(team_game.get("team_a", []))
+            team_b_count = len(team_game.get("team_b", []))
+            overs = team_game.get("overs", 0)
+            matches_text += f"**TEAM MODE**\n"
+            matches_text += f"📊 Status: {status.upper()}\n"
+            matches_text += f"🏏 Team A: {team_a_count} players\n"
+            matches_text += f"🏏 Team B: {team_b_count} players\n"
+            matches_text += f"🎯 Overs: {overs}\n"
+        
+        await message.reply(matches_text)
+
+    # ================= LIVE MATCHES COMMAND =================
+    @app.on_message(filters.command("live_matches") & filters.group)
+    async def live_matches_cmd(client, message: Message):
+        chat_id = message.chat.id
+        solo_game = games.get(chat_id)
+        team_game = team_games.get(chat_id)
+        
+        if not solo_game and not team_game:
+            await message.reply("❌ No live matches in this group!")
+            return
+        
+        live_text = "🔥 **LIVE MATCHES** 🔥\n\n"
+        
+        if solo_game and solo_game.get("status") == "playing":
+            batter = solo_game.get("current_batter", {})
+            bowler = solo_game.get("current_bowler", {})
+            players = solo_game.get("players", [])
+            live_text += f"**SOLO MODE - LIVE**\n"
+            live_text += f"🏏 Batter: {batter.get('name', 'N/A')}\n"
+            live_text += f"⚾ Bowler: {bowler.get('name', 'N/A')}\n"
+            live_text += f"📊 Balls: {solo_game.get('total_balls_in_match', 0)}\n"
+            live_text += f"👥 Active: {len([p for p in players if not p.get('out', False)])}\n\n"
+        
+        if team_game and team_game.get("status") == "playing":
+            current_team = team_game.get("current_team", "N/A")
+            batter = team_game.get("current_batter", {})
+            bowler = team_game.get("current_bowler", {})
+            live_text += f"**TEAM MODE - LIVE**\n"
+            live_text += f"🏏 Batting: Team {current_team}\n"
+            live_text += f"🏏 Batter: {batter.get('name', 'N/A')}\n"
+            live_text += f"⚾ Bowler: {bowler.get('name', 'N/A')}\n"
+            live_text += f"📊 Team A: {team_game.get('team_a_score', 0)}/{team_game.get('team_a_wickets', 0)}\n"
+            live_text += f"📊 Team B: {team_game.get('team_b_score', 0)}/{team_game.get('team_b_wickets', 0)}\n"
+        
+        await message.reply(live_text)
+
+    # ================= HOST CHANGE COMMAND =================
+    @app.on_message(filters.command("host_change") & filters.group)
+    async def host_change_cmd(client, message: Message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        
+        solo_game = games.get(chat_id)
+        team_game = team_games.get(chat_id)
+        
+        if not solo_game and not team_game:
+            await message.reply("❌ No active game found!")
+            return
+        
+        is_group_admin = await is_admin(client, chat_id, user_id)
+        is_solo_host = solo_game and solo_game.get("host_id") == user_id
+        is_team_host = team_game and team_hosts.get(chat_id, {}).get("id") == user_id
+        
+        if not (is_group_admin or is_solo_host or is_team_host):
+            await message.reply("❌ Only game host or group admin can change host!")
+            return
+        
+        new_host = None
+        if message.reply_to_message:
+            new_host = message.reply_to_message.from_user
+        elif message.command and len(message.command) > 1:
+            username = message.command[1].replace("@", "")
+            try:
+                new_host = await client.get_users(username)
+            except:
+                await message.reply(f"❌ User @{username} not found!")
+                return
+        
+        if not new_host:
+            await message.reply("❌ Usage: /host_change @username or reply to a user's message")
+            return
+        
+        if solo_game:
+            solo_game["host_id"] = new_host.id
+            solo_game["host_name"] = new_host.first_name
+            await message.reply(f"👑 Host changed to [{new_host.first_name}](tg://user?id={new_host.id}) in SOLO mode!")
+        
+        if team_game:
+            team_hosts[chat_id] = {"id": new_host.id, "name": new_host.first_name, "username": new_host.username}
+            team_game["host_id"] = new_host.id
+            team_game["host_name"] = new_host.first_name
+            await message.reply(f"👑 Host changed to [{new_host.first_name}](tg://user?id={new_host.id}) in TEAM mode!")
+
+    # ================= SOLO LEAVE COMMAND =================
+    @app.on_message(filters.command("solo_leave") & filters.group)
+    async def solo_leave_cmd(client, message: Message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        solo_game = games.get(chat_id)
+        
+        if not solo_game or solo_game.get("status") != "waiting":
+            await message.reply("❌ No active solo game in waiting mode!")
+            return
+        
+        players = solo_game.get("players", [])
+        for i, p in enumerate(players):
+            if p["id"] == user_id:
+                players.pop(i)
+                await message.reply(f"✅ {message.from_user.first_name} left the solo game!\nRemaining players: {len(players)}")
+                return
+        
+        await message.reply("❌ You are not in the solo game!")
+
+    # ================= FULL SCORE COMMAND =================
+    @app.on_message(filters.command("full_score") & filters.group)
+    async def full_score_cmd(client, message: Message):
+        chat_id = message.chat.id
+        solo_game = games.get(chat_id)
+        team_game = team_games.get(chat_id)
+        
+        if not solo_game and not team_game:
+            await message.reply("❌ No active game found!")
+            return
+        
+        if solo_game:
+            players = solo_game.get("players", [])
+            if players:
+                await message.reply(build_scoreboard(players, is_final=False))
+            else:
+                await message.reply("❌ No players in solo game!")
+        
+        if team_game:
+            score_text = "🏏 **COMPLETE SCOREBOARD** 🏏\n\n"
+            score_text += "**TEAM A:**\n"
+            for p in team_game.get("team_a", []):
+                status = "❌" if p.get("out", False) else "🏏"
+                name = f"@{p['username']}" if p.get('username') else p['name']
+                score_text += f"{status} {name}: {p.get('score', 0)} ({p.get('balls', 0)} balls)"
+                if p.get('fours', 0) > 0 or p.get('sixes', 0) > 0:
+                    score_text += f" [4s:{p.get('fours', 0)} 6s:{p.get('sixes', 0)}]"
+                score_text += "\n"
+            score_text += f"\n**Team A Total:** {team_game.get('team_a_score', 0)}/{team_game.get('team_a_wickets', 0)}\n\n"
+            
+            score_text += "**TEAM B:**\n"
+            for p in team_game.get("team_b", []):
+                status = "❌" if p.get("out", False) else "🏏"
+                name = f"@{p['username']}" if p.get('username') else p['name']
+                score_text += f"{status} {name}: {p.get('score', 0)} ({p.get('balls', 0)} balls)"
+                if p.get('fours', 0) > 0 or p.get('sixes', 0) > 0:
+                    score_text += f" [4s:{p.get('fours', 0)} 6s:{p.get('sixes', 0)}]"
+                score_text += "\n"
+            score_text += f"\n**Team B Total:** {team_game.get('team_b_score', 0)}/{team_game.get('team_b_wickets', 0)}"
+            
+            await message.reply(score_text)
+
+    # ================= REPORT USER COMMAND =================
+    user_reports = {}
+    
+    @app.on_message(filters.command("report_user") & filters.group)
+    async def report_user_cmd(client, message: Message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        
+        reported_user = None
+        if message.reply_to_message:
+            reported_user = message.reply_to_message.from_user
+        elif message.command and len(message.command) > 1:
+            username = message.command[1].replace("@", "")
+            try:
+                reported_user = await client.get_users(username)
+            except:
+                await message.reply(f"❌ User @{username} not found!")
+                return
+        
+        if not reported_user:
+            await message.reply("❌ Usage: /report_user @username or reply to a user's message")
+            return
+        
+        if reported_user.id == user_id:
+            await message.reply("❌ You cannot report yourself!")
+            return
+        
+        reason = "No reason provided"
+        if len(message.command) > 2:
+            reason = " ".join(message.command[2:])
+        
+        if chat_id not in user_reports:
+            user_reports[chat_id] = {}
+        if reported_user.id not in user_reports[chat_id]:
+            user_reports[chat_id][reported_user.id] = []
+        
+        user_reports[chat_id][reported_user.id].append({
+            "reporter_id": user_id,
+            "reason": reason,
+            "time": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        })
+        
+        report_count = len(user_reports[chat_id][reported_user.id])
+        
+        await message.reply(f"✅ **Report Submitted!**\n\nReported: [{reported_user.first_name}](tg://user?id={reported_user.id})\nReason: {reason}\nTotal Reports: {report_count}")
+
+    # ================= REPORT STATS COMMAND =================
+    @app.on_message(filters.command("report_stats") & filters.group)
+    async def report_stats_cmd(client, message: Message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        
+        if not await is_admin(client, chat_id, user_id):
+            await message.reply("❌ Only group admins can view report statistics!")
+            return
+        
+        if chat_id not in user_reports or not user_reports[chat_id]:
+            await message.reply("📊 No reports have been submitted yet!")
+            return
+        
+        stats_text = "📊 **Report Statistics** 📊\n\n"
+        for uid, reports in user_reports[chat_id].items():
+            try:
+                user = await client.get_users(uid)
+                name = f"@{user.username}" if user.username else user.first_name
+            except:
+                name = f"User_{uid}"
+            stats_text += f"👤 {name}: {len(reports)} reports\n"
+            for r in reports[-3:]:
+                stats_text += f"   • Reason: {r['reason']}\n"
+                stats_text += f"     Time: {r['time']}\n"
+            stats_text += "\n"
+        
+        await message.reply(stats_text)
+
+    # ================= BATTING COMMAND (Team Mode) =================
+    @app.on_message(filters.command("batting") & filters.group)
+    async def batting_cmd(client, message: Message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        team_game = team_games.get(chat_id)
+        
+        if not team_game or team_game.get("status") != "playing":
+            await message.reply("❌ No active team game found!")
+            return
+        
+        is_captain_a = team_game.get("captain_a", {}).get("id") == user_id
+        is_captain_b = team_game.get("captain_b", {}).get("id") == user_id
+        
+        if not (is_captain_a or is_captain_b):
+            await message.reply("❌ Only team captains can change batting order!")
+            return
+        
+        args = message.command
+        if len(args) < 2:
+            await message.reply("❌ Usage: /batting <position_number>\nExample: /batting 3")
+            return
+        
+        try:
+            position = int(args[1]) - 1
+        except ValueError:
+            await message.reply("❌ Please provide a valid number!")
+            return
+        
+        current_team = team_game.get("current_team", "A")
+        team_key = f"team_{current_team.lower()}"
+        players = team_game[team_key]
+        
+        if position < 0 or position >= len(players):
+            await message.reply(f"❌ Invalid position! Choose 1 to {len(players)}")
+            return
+        
+        current_batter_index = team_game.get("current_batter_index", 0)
+        players[current_batter_index], players[position] = players[position], players[current_batter_index]
+        team_game["current_batter_index"] = position
+        team_game["current_batter"] = players[position].copy()
+        
+        await message.reply(f"✅ Batting order updated!\nNew batter at position {args[1]}: {players[position]['name']}")
+
+    # ================= BOWLING COMMAND (Team Mode) =================
+    @app.on_message(filters.command("bowling") & filters.group)
+    async def bowling_cmd(client, message: Message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        team_game = team_games.get(chat_id)
+        
+        if not team_game or team_game.get("status") != "playing":
+            await message.reply("❌ No active team game found!")
+            return
+        
+        is_captain_a = team_game.get("captain_a", {}).get("id") == user_id
+        is_captain_b = team_game.get("captain_b", {}).get("id") == user_id
+        
+        if not (is_captain_a or is_captain_b):
+            await message.reply("❌ Only team captains can change bowling order!")
+            return
+        
+        args = message.command
+        if len(args) < 2:
+            await message.reply("❌ Usage: /bowling <position_number>\nExample: /bowling 2")
+            return
+        
+        try:
+            position = int(args[1]) - 1
+        except ValueError:
+            await message.reply("❌ Please provide a valid number!")
+            return
+        
+        current_team = team_game.get("current_team", "A")
+        team_key = f"team_{current_team.lower()}"
+        players = team_game[team_key]
+        
+        if position < 0 or position >= len(players):
+            await message.reply(f"❌ Invalid position! Choose 1 to {len(players)}")
+            return
+        
+        current_bowler_index = team_game.get("current_bowler_index", 0)
+        players[current_bowler_index], players[position] = players[position], players[current_bowler_index]
+        team_game["current_bowler_index"] = position
+        team_game["current_bowler"] = players[position].copy()
+        
+        await message.reply(f"✅ Bowling order updated!\nNew bowler at position {args[1]}: {players[position]['name']}")
+
+    # ================= CAP CHANGE COMMAND =================
+    @app.on_message(filters.command("cap_change") & filters.group)
+    async def cap_change_cmd(client, message: Message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        team_game = team_games.get(chat_id)
+        
+        if not team_game:
+            await message.reply("❌ No active team game found!")
+            return
+        
+        host = team_hosts.get(chat_id)
+        if not host or host.get("id") != user_id:
+            await message.reply("❌ Only game host can change captains!")
+            return
+        
+        new_captain = None
+        if message.reply_to_message:
+            new_captain = message.reply_to_message.from_user
+        elif message.command and len(message.command) > 1:
+            username = message.command[1].replace("@", "")
+            try:
+                new_captain = await client.get_users(username)
+            except:
+                await message.reply(f"❌ User @{username} not found!")
+                return
+        
+        if not new_captain:
+            await message.reply("❌ Usage: /cap_change @username or reply to a user's message")
+            return
+        
+        team = None
+        for player in team_game["team_a"]:
+            if player["id"] == new_captain.id:
+                team = "A"
+                break
+        for player in team_game["team_b"]:
+            if player["id"] == new_captain.id:
+                team = "B"
+                break
+        
+        if not team:
+            await message.reply(f"❌ {new_captain.first_name} is not in any team!")
+            return
+        
+        if team == "A":
+            team_game["captain_a"] = {"id": new_captain.id, "name": new_captain.first_name, "username": new_captain.username}
+        else:
+            team_game["captain_b"] = {"id": new_captain.id, "name": new_captain.first_name, "username": new_captain.username}
+        
+        await message.reply(f"✅ Team {team} captain changed to [{new_captain.first_name}](tg://user?id={new_captain.id})!")
+
+    # ================= ADD CAP COMMAND =================
+    @app.on_message(filters.command("add_cap") & filters.group)
+    async def add_cap_cmd(client, message: Message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        team_game = team_games.get(chat_id)
+        
+        if not team_game:
+            await message.reply("❌ No active team game found!")
+            return
+        
+        host = team_hosts.get(chat_id)
+        if not host or host.get("id") != user_id:
+            await message.reply("❌ Only game host can add captains!")
+            return
+        
+        new_captain = None
+        if message.reply_to_message:
+            new_captain = message.reply_to_message.from_user
+        elif message.command and len(message.command) > 1:
+            username = message.command[1].replace("@", "")
+            try:
+                new_captain = await client.get_users(username)
+            except:
+                await message.reply(f"❌ User @{username} not found!")
+                return
+        
+        if not new_captain:
+            await message.reply("❌ Usage: /add_cap @username or reply to a user's message")
+            return
+        
+        team = None
+        for player in team_game["team_a"]:
+            if player["id"] == new_captain.id:
+                team = "A"
+                break
+        for player in team_game["team_b"]:
+            if player["id"] == new_captain.id:
+                team = "B"
+                break
+        
+        if not team:
+            await message.reply(f"❌ {new_captain.first_name} is not in any team!")
+            return
+        
+        if team == "A" and team_game.get("captain_a"):
+            await message.reply("❌ Team A already has a captain! Use /cap_change to change.")
+            return
+        elif team == "B" and team_game.get("captain_b"):
+            await message.reply("❌ Team B already has a captain! Use /cap_change to change.")
+            return
+        
+        if team == "A":
+            team_game["captain_a"] = {"id": new_captain.id, "name": new_captain.first_name, "username": new_captain.username}
+        else:
+            team_game["captain_b"] = {"id": new_captain.id, "name": new_captain.first_name, "username": new_captain.username}
+        
+        await message.reply(f"✅ {new_captain.first_name} is now Team {team} Captain!")
+
+    # ================= RM CAP COMMAND =================
+    @app.on_message(filters.command("rm_cap") & filters.group)
+    async def rm_cap_cmd(client, message: Message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        team_game = team_games.get(chat_id)
+        
+        if not team_game:
+            await message.reply("❌ No active team game found!")
+            return
+        
+        host = team_hosts.get(chat_id)
+        if not host or host.get("id") != user_id:
+            await message.reply("❌ Only game host can remove captains!")
+            return
+        
+        rm_captain = None
+        if message.reply_to_message:
+            rm_captain = message.reply_to_message.from_user
+        elif message.command and len(message.command) > 1:
+            username = message.command[1].replace("@", "")
+            try:
+                rm_captain = await client.get_users(username)
+            except:
+                await message.reply(f"❌ User @{username} not found!")
+                return
+        
+        if not rm_captain:
+            await message.reply("❌ Usage: /rm_cap @username or reply to a user's message")
+            return
+        
+        removed = False
+        if team_game.get("captain_a", {}).get("id") == rm_captain.id:
+            team_game["captain_a"] = None
+            removed = True
+            team = "A"
+        elif team_game.get("captain_b", {}).get("id") == rm_captain.id:
+            team_game["captain_b"] = None
+            removed = True
+            team = "B"
+        
+        if removed:
+            await message.reply(f"✅ {rm_captain.first_name} is no longer Team {team} Captain!")
+        else:
+            await message.reply(f"❌ {rm_captain.first_name} is not a captain!")
+
     # ================= END MATCH COMMAND =================
     @app.on_message(filters.command("end_match") & filters.group)
     async def end_match_cmd(client, message: Message):
@@ -307,7 +966,6 @@ def register_handlers(app):
         user_id = message.from_user.id
         
         is_group_admin = await is_admin(client, chat_id, user_id)
-        
         if not is_group_admin:
             await message.reply("❌ Only group admins can end the match!")
             return
@@ -315,31 +973,19 @@ def register_handlers(app):
         solo_game = games.get(chat_id)
         if solo_game and solo_game.get("status") == "playing" and not solo_game.get("game_over"):
             keyboard = InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton("✅ Yes, End Match", callback_data=f"end_solo_confirm_{chat_id}"),
-                    InlineKeyboardButton("❌ No, Cancel", callback_data="end_cancel")
-                ]
+                [InlineKeyboardButton("✅ Yes, End Match", callback_data=f"end_solo_confirm_{chat_id}"),
+                 InlineKeyboardButton("❌ No, Cancel", callback_data="end_cancel")]
             ])
-            await message.reply(
-                "⚠️ **Are you sure you want to end the match?**\n\n"
-                "This will stop the current solo game and save the match report.",
-                reply_markup=keyboard
-            )
+            await message.reply("⚠️ **Are you sure you want to end the match?**", reply_markup=keyboard)
             return
         
         team_game = team_games.get(chat_id)
         if team_game and team_game.get("status") == "playing" and not team_game.get("game_over"):
             keyboard = InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton("✅ Yes, End Match", callback_data=f"end_team_confirm_{chat_id}"),
-                    InlineKeyboardButton("❌ No, Cancel", callback_data="end_cancel")
-                ]
+                [InlineKeyboardButton("✅ Yes, End Match", callback_data=f"end_team_confirm_{chat_id}"),
+                 InlineKeyboardButton("❌ No, Cancel", callback_data="end_cancel")]
             ])
-            await message.reply(
-                "⚠️ **Are you sure you want to end the match?**\n\n"
-                "This will stop the current team game and save the match report.",
-                reply_markup=keyboard
-            )
+            await message.reply("⚠️ **Are you sure you want to end the match?**", reply_markup=keyboard)
             return
         
         await message.reply("❌ No active game found to end!")
@@ -350,81 +996,20 @@ def register_handlers(app):
         chat_id = int(callback.data.split("_")[3])
         user_id = callback.from_user.id
         
-        is_group_admin = await is_admin(client, chat_id, user_id)
-        
-        if not is_group_admin:
+        if not await is_admin(client, chat_id, user_id):
             await callback.answer("❌ Only group admins can end the match!", show_alert=True)
             return
         
         game = games.get(chat_id)
-        if not game or game.get("status") != "playing" or game.get("game_over"):
+        if not game or game.get("status") != "playing":
             await callback.answer("❌ No active game found!", show_alert=True)
             return
         
         game["game_over"] = True
-        game["match_end_time"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
         players = game["players"]
-        match_start_time = game.get("start_time", datetime.now())
-        if isinstance(match_start_time, float):
-            match_start_time = datetime.fromtimestamp(match_start_time).strftime('%Y-%m-%d %H:%M:%S')
-        else:
-            match_start_time = match_start_time.strftime('%Y-%m-%d %H:%M:%S') if hasattr(match_start_time, 'strftime') else str(match_start_time)
-        
-        match_end_time = game.get("match_end_time", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-        
-        winner = max(players, key=lambda x: x.get("score", 0)) if players else None
-        
-        match_report = f"""═══════════════════════════════
-         🏏 MATCH REPORT 🏏
-═══════════════════════════════
-
-📅 Date: {datetime.now().strftime('%Y-%m-%d')}
-⏰ Start Time: {match_start_time}
-⏰ End Time: {match_end_time}
-🎯 Game Mode: SOLO
-🎯 Ball Mode: {game.get('ball_mode', 3)} balls per bowler
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          📊 FINAL SCORES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-"""
-        
-        for i, p in enumerate(players, 1):
-            status = "❌ OUT" if p.get("out", False) else "🏏 NOT OUT"
-            name = f"@{p['username']}" if p.get("username") else p["name"]
-            match_report += f"{i}. {status} {name}\n"
-            match_report += f"   Score: {p.get('score', 0)} runs ({p.get('balls', 0)} balls)\n"
-            match_report += f"   4s: {p.get('fours', 0)} | 6s: {p.get('sixes', 0)}\n"
-            if p.get("history"):
-                history_str = " → ".join(p["history"][-10:])
-                match_report += f"   Ball by Ball: {history_str}\n"
-            match_report += f"   ID: {p['id']}\n\n"
-        
-        if winner:
-            winner_name = f"@{winner['username']}" if winner.get('username') else winner["name"]
-            match_report += f"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            match_report += f"          🏆 WINNER 🏆\n"
-            match_report += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            match_report += f"   🎉 {winner_name} 🎉\n"
-            match_report += f"   Score: {winner.get('score', 0)} runs\n\n"
-        
-        match_report += f"\n═══════════════════════════════\n"
-        match_report += f"      Match Ended by Admin!\n"
-        match_report += f"═══════════════════════════════"
-        
-        report_bytes = io.BytesIO(match_report.encode('utf-8'))
-        report_bytes.name = "res.txt"
         
         await callback.message.delete()
         await client.send_message(chat_id, "🏏 **Match Ended!** 🏏")
-        await client.send_document(
-            chat_id,
-            report_bytes,
-            caption="📄 **Match Report**\nGame data saved successfully!"
-        )
-        
         await client.send_message(chat_id, build_scoreboard(players, is_final=True))
         
         if chat_id in games:
@@ -438,116 +1023,19 @@ def register_handlers(app):
         chat_id = int(callback.data.split("_")[3])
         user_id = callback.from_user.id
         
-        is_group_admin = await is_admin(client, chat_id, user_id)
-        
-        if not is_group_admin:
+        if not await is_admin(client, chat_id, user_id):
             await callback.answer("❌ Only group admins can end the match!", show_alert=True)
             return
         
         game = team_games.get(chat_id)
-        if not game or game.get("status") != "playing" or game.get("game_over"):
+        if not game or game.get("status") != "playing":
             await callback.answer("❌ No active game found!", show_alert=True)
             return
         
         game["game_over"] = True
-        game["match_end_time"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        match_start_time = game.get("match_start_time")
-        if match_start_time:
-            if hasattr(match_start_time, 'strftime'):
-                match_start_time = match_start_time.strftime('%Y-%m-%d %H:%M:%S')
-            else:
-                match_start_time = str(match_start_time)
-        else:
-            match_start_time = "Not started"
-        
-        match_end_time = game.get("match_end_time", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-        
-        if game.get("team_a_score", 0) > game.get("team_b_score", 0):
-            winner = "Team A"
-            win_margin = f"{game['team_a_score'] - game['team_b_score']} runs"
-        elif game.get("team_b_score", 0) > game.get("team_a_score", 0):
-            winner = "Team B"
-            win_margin = f"{game['team_b_score'] - game['team_a_score']} runs"
-        else:
-            winner = "Match Tied"
-            win_margin = "0 runs"
-        
-        match_report = f"""═══════════════════════════════
-         🏏 MATCH REPORT 🏏
-═══════════════════════════════
-
-📅 Date: {datetime.now().strftime('%Y-%m-%d')}
-⏰ Start Time: {match_start_time}
-⏰ End Time: {match_end_time}
-🎯 Game Mode: TEAM
-🎯 Overs: {game.get('overs', 0)} overs per side
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          📊 FINAL SCORE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🏏 TEAM A: {game.get('team_a_score', 0)}/{game.get('team_a_wickets', 0)}
-🏏 TEAM B: {game.get('team_b_score', 0)}/{game.get('team_b_wickets', 0)}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          🏆 WINNER
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-   🎉 {winner} ({win_margin}) 🎉
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-         👥 TEAM A PLAYERS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-"""
-        
-        for p in game.get("team_a", []):
-            status = "❌ OUT" if p.get("out", False) else "🏏"
-            name = f"@{p['username']}" if p.get('username') else p['name']
-            match_report += f"{status} {name}: {p.get('score', 0)} runs ({p.get('balls', 0)} balls)"
-            if p.get('fours', 0) > 0 or p.get('sixes', 0) > 0:
-                match_report += f" (4s: {p.get('fours', 0)}, 6s: {p.get('sixes', 0)})"
-            match_report += "\n"
-        
-        match_report += f"""
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-         👥 TEAM B PLAYERS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-"""
-        
-        for p in game.get("team_b", []):
-            status = "❌ OUT" if p.get("out", False) else "🏏"
-            name = f"@{p['username']}" if p.get('username') else p['name']
-            match_report += f"{status} {name}: {p.get('score', 0)} runs ({p.get('balls', 0)} balls)"
-            if p.get('fours', 0) > 0 or p.get('sixes', 0) > 0:
-                match_report += f" (4s: {p.get('fours', 0)}, 6s: {p.get('sixes', 0)})"
-            match_report += "\n"
-        
-        match_report += f"""
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          🎯 TOSS INFO
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🏆 Toss Winner: Team {game.get('toss_winner', 'N/A')}
-📝 Decision: {game.get('toss_decision', 'N/A')}
-
-═══════════════════════════════
-      Match Ended by Admin!
-═══════════════════════════════"""
-        
-        report_bytes = io.BytesIO(match_report.encode('utf-8'))
-        report_bytes.name = "res.txt"
         
         await callback.message.delete()
         await client.send_message(chat_id, "🏏 **Match Ended!** 🏏")
-        await client.send_document(
-            chat_id,
-            report_bytes,
-            caption="📄 **Match Report**\nGame data saved successfully!"
-        )
-        
         await client.send_message(chat_id, build_team_scoreboard(game))
         
         if chat_id in team_games:
@@ -572,47 +1060,27 @@ def register_handlers(app):
             if game.get("status") == "playing" and not game.get("game_over"):
                 bowler = game.get("current_bowler", {})
                 if bowler.get("id") == user_id and game.get("bowling_number") is None:
-                    await message.reply(
-                        "🎯 **Send bowling number (1-6)**\n\n"
-                        "Example: `4`\n\n"
-                        "⏰ You have 60 seconds!"
-                    )
+                    await message.reply("🎯 **Send bowling number (1-6)**\n\nExample: `4`\n\n⏰ You have 60 seconds!")
                     return
         
         for chat_id, game in team_games.items():
             if game.get("status") == "playing" and not game.get("game_over"):
                 bowler = game.get("current_bowler", {})
                 if bowler.get("id") == user_id and game.get("bowling_number") is None:
-                    await message.reply(
-                        "🎯 **Send bowling number (1-6)**\n\n"
-                        "Example: `4`\n\n"
-                        "⏰ You have 60 seconds!"
-                    )
+                    await message.reply("🎯 **Send bowling number (1-6)**\n\nExample: `4`\n\n⏰ You have 60 seconds!")
                     return
         
-        await message.reply(
-            "🏏 **Welcome to Cricket Game Bot!**\n\n"
-            "Use me in a group to play cricket games.\n"
-            "Add me to a group and use /start there!\n\n"
-            "**Commands:**\n"
-            "/start - Start game (Admin) or Vote (Member)\n"
-            "/joingame - Join a solo game\n"
-            "/end_match - End current match (Admin only)\n"
-            "/score - Check live score"
-        )
+        await message.reply("🏏 **Welcome to Cricket Game Bot!**\n\nUse me in a group to play cricket games.\nAdd me to a group and use /start there!\n\n**Commands:**\n/start - Start game (Admin) or Vote (Member)\n/joingame - Join a solo game\n/score - Check live score")
 
     # ================= SELECT GAME MENU =================
     async def select_game_menu(client, message):
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("👤 Solo", callback_data="mode_solo"), 
-             InlineKeyboardButton("👥 Team", callback_data="mode_team")],
+            [InlineKeyboardButton("👤 Solo", callback_data="mode_solo"), InlineKeyboardButton("👥 Team", callback_data="mode_team")],
             [InlineKeyboardButton("❌ Cancel", callback_data="mode_cancel")]
         ])
         
-        caption = """🏏 **Select Game Mode** 🏏
-
-Choose how you want to play:"""
-
+        caption = "🏏 **Select Game Mode** 🏏\n\nChoose how you want to play:"
+        
         try:
             await message.reply_photo(SELECT_GAME_IMG, caption=caption, reply_markup=keyboard)
         except:
@@ -644,32 +1112,19 @@ Choose how you want to play:"""
             [InlineKeyboardButton("🎯 Solo Play - 3 Ball", callback_data="ball_3")]
         ])
         
-        caption = """🏏 **Choose Bowling Mode** 🏏
-
-• Solo Play - 1 Ball (Single ball per bowler)
-• Solo Play - 3 Ball (Three balls per bowler)"""
+        caption = "🏏 **Choose Bowling Mode** 🏏\n\n• Solo Play - 1 Ball (Single ball per bowler)\n• Solo Play - 3 Ball (Three balls per bowler)"
         
         await callback.message.delete()
         
         try:
-            await callback.message.reply_photo(
-                SOLO_PLAY_IMG,
-                caption=caption,
-                reply_markup=keyboard
-            )
-        except Exception as e:
-            print(f"Error sending solo play image: {e}")
-            await callback.message.reply(
-                caption,
-                reply_markup=keyboard
-            )
+            await callback.message.reply_photo(SOLO_PLAY_IMG, caption=caption, reply_markup=keyboard)
+        except:
+            await callback.message.reply(caption, reply_markup=keyboard)
         await callback.answer()
 
     @app.on_callback_query(filters.regex("^ball_"))
     async def ball_handler(client, callback: CallbackQuery):
-        action = callback.data.split("_")[1]
-        
-        ball_mode = int(action)
+        ball_mode = int(callback.data.split("_")[1])
         chat_id = callback.message.chat.id
         
         create_game(chat_id)
@@ -678,45 +1133,35 @@ Choose how you want to play:"""
         game["mode"] = f"solo_{ball_mode}"
         
         await callback.message.delete()
-        
-        await client.send_message(
-            chat_id,
-            f"🎉 Solo game created! Join the game using /joingame (2 minutes to join)\n⏰"
-        )
-        
+        await client.send_message(chat_id, "🎉 Solo game created! Join the game using /joingame (2 minutes to join)\n⏰")
         asyncio.create_task(start_join_timer(client, chat_id))
 
     async def start_join_timer(client, chat_id):
         await asyncio.sleep(60)
-        
         game = games.get(chat_id)
         if game and game["status"] == "waiting":
             players_count = len(game.get("players", []))
             await client.send_message(chat_id, f"1 minute left! {players_count} players joined. Send /joingame to join!")
         
         await asyncio.sleep(30)
-        
         game = games.get(chat_id)
         if game and game["status"] == "waiting":
             players_count = len(game.get("players", []))
             await client.send_message(chat_id, f"30 seconds left! {players_count} players joined. /joingame fast!!")
         
         await asyncio.sleep(20)
-        
         game = games.get(chat_id)
         if game and game["status"] == "waiting":
             players_count = len(game.get("players", []))
             await client.send_message(chat_id, f"Last 10 seconds! {players_count} players joined. /joingame !!")
         
         await asyncio.sleep(10)
-        
         game = games.get(chat_id)
         if game and game["status"] == "waiting":
             players_count = len(game.get("players", []))
             
             if players_count < 4:
-                await client.send_message(chat_id, f"❌ Minimum 4 players required to start the game! 👥\n\nCurrent players: {players_count}/4")
-                await client.send_message(chat_id, f"⚠️ Failed to start the game.\n\nGame cancelled due to insufficient players.")
+                await client.send_message(chat_id, f"❌ Minimum 4 players required to start the game! 👥\n\nCurrent players: {players_count}/4\n⚠️ Game cancelled due to insufficient players.")
                 if chat_id in games:
                     del games[chat_id]
             else:
@@ -735,7 +1180,6 @@ Choose how you want to play:"""
             return await message.reply("❌ Game already started!")
         
         if join_game(chat_id, message.from_user):
-            game = games[chat_id]
             players_count = len(game["players"])
             await message.reply(f"🎉 {message.from_user.first_name}, you've joined the solo game! (Player {players_count}) 👍")
 
@@ -746,10 +1190,8 @@ Choose how you want to play:"""
         
         players_count = len(game["players"])
         
-        # Minimum 4 players required
         if players_count < 4:
-            await client.send_message(chat_id, f"❌ Minimum 4 players required to start the game! 👥\n\nCurrent players: {players_count}/4")
-            await client.send_message(chat_id, f"⚠️ Failed to start the game.\n\nPlease wait for more players to join using /joingame")
+            await client.send_message(chat_id, f"❌ Minimum 4 players required to start the game! 👥\n\nCurrent players: {players_count}/4\n⚠️ Game cancelled!")
             if chat_id in games:
                 del games[chat_id]
             return
@@ -758,11 +1200,9 @@ Choose how you want to play:"""
         game = games[chat_id]
         players = game["players"]
         
-        host_text = "🏏 **SOLO CRICKET** 🏏\n\n"
-        host_text += "**Players List:**\n"
+        host_text = "🏏 **SOLO CRICKET** 🏏\n\n**Players List:**\n"
         for i, p in enumerate(players, 1):
-            name = f"[{p['name']}](tg://user?id={p['id']})"
-            host_text += f"{i}. {name}\n"
+            host_text += f"{i}. [{p['name']}](tg://user?id={p['id']})\n"
         
         try:
             await client.send_photo(chat_id, HOST_IMAGE_URL, caption=host_text)
@@ -772,11 +1212,8 @@ Choose how you want to play:"""
         batter = game["current_batter"]
         bowler = game["current_bowler"]
         
-        batter_clickable = f"[{batter['name']}](tg://user?id={batter['id']})"
-        bowler_clickable = f"[{bowler['name']}](tg://user?id={bowler['id']})"
-        
-        await client.send_message(chat_id, f"🎯 Hey {batter_clickable}, now you're batter!")
-        await client.send_message(chat_id, f"🎯 Hey {bowler_clickable}, now you're bowling!")
+        await client.send_message(chat_id, f"🎯 Hey [{batter['name']}](tg://user?id={batter['id']}), now you're batter!")
+        await client.send_message(chat_id, f"🎯 Hey [{bowler['name']}](tg://user?id={bowler['id']}), now you're bowling!")
         
         await asyncio.sleep(1)
         await send_bowling_video(client, chat_id, bowler)
@@ -784,14 +1221,8 @@ Choose how you want to play:"""
     # ================= TEAM MODE =================
     async def team_mode_start(client, callback):
         chat_id = callback.message.chat.id
-        
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("👑 I'm the Host", callback_data="team_become_host")]
-        ])
-        
-        caption = """🎉 **New Game Alert!** 🎉 
-
-Who will be the game host for this match? 🤔"""
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("👑 I'm the Host", callback_data="team_become_host")]])
+        caption = "🎉 **New Game Alert!** 🎉 \n\nWho will be the game host for this match? 🤔"
         
         try:
             await client.send_photo(chat_id, TEAM_PLAY_IMG, caption=caption, reply_markup=keyboard)
@@ -814,52 +1245,24 @@ Who will be the game host for this match? 🤔"""
         if chat_id in team_hosts:
             del team_hosts[chat_id]
         
-        team_hosts[chat_id] = {
-            "id": user.id,
-            "name": user.first_name,
-            "username": user.username
-        }
+        team_hosts[chat_id] = {"id": user.id, "name": user.first_name, "username": user.username}
         
         team_games[chat_id] = {
-            "host_id": user.id,
-            "host_name": user.first_name,
-            "status": "waiting_host",
-            "team_a": [],
-            "team_b": [],
-            "captain_a": None,
-            "captain_b": None,
-            "toss_winner": None,
-            "toss_decision": None,
-            "overs": 0,
-            "team_a_score": 0,
-            "team_b_score": 0,
-            "team_a_wickets": 0,
-            "team_b_wickets": 0,
-            "current_team": None,
-            "target": None,
-            "game_over": False,
-            "winner": None,
-            "match_start_time": None,
-            "match_end_time": None,
-            "total_balls": 0,
-            "team_a_name": "Team A",
-            "team_b_name": "Team B"
+            "host_id": user.id, "host_name": user.first_name, "status": "waiting_host",
+            "team_a": [], "team_b": [], "captain_a": None, "captain_b": None,
+            "toss_winner": None, "toss_decision": None, "overs": 0,
+            "team_a_score": 0, "team_b_score": 0, "team_a_wickets": 0, "team_b_wickets": 0,
+            "current_team": None, "target": None, "game_over": False, "winner": None,
+            "match_start_time": None, "match_end_time": None, "total_balls": 0,
+            "team_a_name": "Team A", "team_b_name": "Team B"
         }
         
         await callback.message.delete()
         
         try:
-            await client.send_photo(
-                chat_id,
-                TEAM_CHAPU_IMG,
-                caption=f"[{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏"
-            )
-        except Exception as e:
-            print(f"Image send error: {e}")
-            await client.send_message(
-                chat_id,
-                f"[{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏"
-            )
+            await client.send_photo(chat_id, TEAM_CHAPU_IMG, caption=f"[{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏")
+        except:
+            await client.send_message(chat_id, f"[{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏")
         
         await callback.answer()
 
@@ -883,11 +1286,7 @@ Who will be the game host for this match? 🤔"""
             return
         
         game["status"] = "team_creation_a"
-        
-        await message.reply(
-            f"🎉 Team creation is underway! Join Team A by sending /join_teamA 📣\n\n"
-        )
-        
+        await message.reply("🎉 Team creation is underway! Join Team A by sending /join_teamA 📣\n\n")
         asyncio.create_task(team_a_timer(client, chat_id))
 
     @app.on_message(filters.command("join_teamA") & filters.group)
@@ -905,11 +1304,11 @@ Who will be the game host for this match? 🤔"""
             await message.reply("❌ You are the host! Host cannot join any team.")
             return
         
-        if user.id in [p["id"] for p in game["team_a"]]:
+        if any(p["id"] == user.id for p in game["team_a"]):
             await message.reply("❌ You already joined Team A!")
             return
         
-        if user.id in [p["id"] for p in game["team_b"]]:
+        if any(p["id"] == user.id for p in game["team_b"]):
             await message.reply("❌ You already joined Team B!")
             return
         
@@ -943,11 +1342,11 @@ Who will be the game host for this match? 🤔"""
             await message.reply("❌ You are the host! Host cannot join any team.")
             return
         
-        if user.id in [p["id"] for p in game["team_b"]]:
+        if any(p["id"] == user.id for p in game["team_b"]):
             await message.reply("❌ You already joined Team B!")
             return
         
-        if user.id in [p["id"] for p in game["team_a"]]:
+        if any(p["id"] == user.id for p in game["team_a"]):
             await message.reply("❌ You already joined Team A!")
             return
         
@@ -963,10 +1362,7 @@ Who will be the game host for this match? 🤔"""
         game = team_games.get(chat_id)
         if game and game["status"] == "team_creation_b":
             game["status"] = "captain_selection"
-            await client.send_message(
-                chat_id,
-                f"👋 Hey, now members are joined the teams! 🎉 Choose Team captains user /choose_cap 📝"
-            )
+            await client.send_message(chat_id, "👋 Hey, now members are joined the teams! 🎉 Choose Team captains user /choose_cap 📝")
 
     @app.on_message(filters.command("choose_cap") & filters.group)
     async def choose_cap_cmd(client, message):
@@ -992,10 +1388,7 @@ Who will be the game host for this match? 🤔"""
             [InlineKeyboardButton("🏆 Choose Team B Captain", callback_data="choose_cap_b")]
         ])
         
-        await message.reply(
-            "**Game Host, please choose captains for Team A and Team B:**\n\n",
-            reply_markup=keyboard
-        )
+        await message.reply("**Game Host, please choose captains for Team A and Team B:**\n\n", reply_markup=keyboard)
 
     @app.on_callback_query(filters.regex("^choose_cap_a$"))
     async def choose_cap_a_callback(client, callback):
@@ -1027,14 +1420,9 @@ Who will be the game host for this match? 🤔"""
             await callback.message.delete()
             await start_toss(client, chat_id)
         else:
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🏏 Choose Team B Captain 🏏", callback_data="choose_cap_b")]
-            ])
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏏 Choose Team B Captain 🏏", callback_data="choose_cap_b")]])
             await callback.message.edit_text(
-                f"🏏 **Captain Selection!** 🏏\n\n"
-                f"✅ Team A Captain: {user_name}\n"
-                f"⚠️ Team B Captain: Not selected yet\n\n"
-                f"Team B members click 'Team B Captain' button to become captain.",
+                f"🏏 **Captain Selection!** 🏏\n\n✅ Team A Captain: {user_name}\n⚠️ Team B Captain: Not selected yet\n\nTeam B members click 'Team B Captain' button to become captain.",
                 reply_markup=keyboard
             )
 
@@ -1068,14 +1456,9 @@ Who will be the game host for this match? 🤔"""
             await callback.message.delete()
             await start_toss(client, chat_id)
         else:
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🏏 Choose Team A Captain 🏏", callback_data="choose_cap_a")]
-            ])
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏏 Choose Team A Captain 🏏", callback_data="choose_cap_a")]])
             await callback.message.edit_text(
-                f"🏏 **Captain Selection!** 🏏\n\n"
-                f"⚠️ Team A Captain: Not selected yet\n"
-                f"✅ Team B Captain: {user_name}\n\n"
-                f"Team A members click 'Team A Captain' button to become captain.",
+                f"🏏 **Captain Selection!** 🏏\n\n⚠️ Team A Captain: Not selected yet\n✅ Team B Captain: {user_name}\n\nTeam A members click 'Team A Captain' button to become captain.",
                 reply_markup=keyboard
             )
 
@@ -1084,20 +1467,12 @@ Who will be the game host for this match? 🤔"""
         if not game:
             return
         
-        cap_a_name = game['captain_a']['name']
-        cap_b_name = game['captain_b']['name']
-        
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🪙 HEADS", callback_data="toss_heads")],
             [InlineKeyboardButton("🪙 TAILS", callback_data="toss_tails")]
         ])
         
-        await client.send_message(
-            chat_id,
-            f"Team Captains, choose Heads or Tails:\n\n",
-            reply_markup=keyboard
-        )
-        
+        await client.send_message(chat_id, "Team Captains, choose Heads or Tails:\n\n", reply_markup=keyboard)
         game["status"] = "toss"
 
     @app.on_callback_query(filters.regex("^toss_"))
@@ -1128,7 +1503,6 @@ Who will be the game host for this match? 🤔"""
         cap_b_display = f"@{cap_b_username}" if cap_b_username else cap_b_name
         
         toss_video_url = TOSS_VIDEO
-        
         await callback.message.delete()
         
         cap_a_clickable = f"[{cap_a_display}](tg://user?id={cap_a_id})"
@@ -1137,34 +1511,18 @@ Who will be the game host for this match? 🤔"""
         if choice == toss_result:
             winner_clickable = cap_a_clickable
             winner_team = "A"
-            
-            caption_text = f"🪙 The coin shows: {toss_result.upper()}!\n\n"
-            caption_text += f"🅰️ - {cap_a_clickable} chose {choice.upper()}\n"
-            caption_text += f"🅱️ {cap_b_clickable} got {toss_result.upper()}\n\n"
-            caption_text += f"🏆 {winner_clickable} from Team {winner_team} won the toss!\n\n"
-            caption_text += f"🏆 {winner_clickable}, please choose to Bat or Bowl:"
         else:
             winner_clickable = cap_b_clickable
             winner_team = "B"
-            
-            caption_text = f"🪙 The coin shows: {toss_result.upper()}!\n\n"
-            caption_text += f"🅰️ - {cap_a_clickable} chose {choice.upper()}\n"
-            caption_text += f"🅱️ {cap_b_clickable} got {toss_result.upper()}\n\n"
-            caption_text += f"🏆 {winner_clickable} from Team {winner_team} won the toss!\n\n"
-            caption_text += f"🏆 {winner_clickable}, please choose to Bat or Bowl:"
+        
+        caption_text = f"🪙 The coin shows: {toss_result.upper()}!\n\n🅰️ - {cap_a_clickable} chose {choice.upper()}\n🅱️ {cap_b_clickable} got {toss_result.upper()}\n\n🏆 {winner_clickable} from Team {winner_team} won the toss!\n\n🏆 {winner_clickable}, please choose to Bat or Bowl:"
         
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🏏 BAT FIRST", callback_data="toss_bat")],
             [InlineKeyboardButton("⚾ BOWL FIRST", callback_data="toss_bowl")]
         ])
         
-        await client.send_video(
-            chat_id,
-            toss_video_url,
-            caption=caption_text,
-            reply_markup=keyboard
-        )
-        
+        await client.send_video(chat_id, toss_video_url, caption=caption_text, reply_markup=keyboard)
         game["toss_winner"] = winner_team
 
     @app.on_callback_query(filters.regex("^toss_bat$|^toss_bowl$"))
@@ -1188,11 +1546,7 @@ Who will be the game host for this match? 🤔"""
             return
         
         game["toss_decision"] = decision
-        
-        if decision == "bat":
-            batting_team = toss_winner
-        else:
-            batting_team = "A" if toss_winner == "B" else "B"
+        batting_team = toss_winner if decision == "bat" else ("A" if toss_winner == "B" else "B")
         
         await callback.message.delete()
         await select_overs(client, chat_id, batting_team)
@@ -1213,12 +1567,7 @@ Who will be the game host for this match? 🤔"""
             buttons.append(row)
         
         keyboard = InlineKeyboardMarkup(buttons)
-        
-        await client.send_message(
-            chat_id,
-            f"📊 **Select number of overs:**\n\nChoose overs (1 to 20 overs per side):",
-            reply_markup=keyboard
-        )
+        await client.send_message(chat_id, "📊 **Select number of overs:**\n\nChoose overs (1 to 20 overs per side):", reply_markup=keyboard)
         
         game["status"] = "over_selection"
         game["batting_first"] = batting_team
@@ -1241,13 +1590,7 @@ Who will be the game host for this match? 🤔"""
         batting_team = game["batting_first"]
         team_name = "Team A" if batting_team == "A" else "Team B"
         
-        await client.send_message(
-            chat_id,
-            f"✅ Match set! {overs} overs per side.\n\n"
-            f"🚀 Match is starting...\n"
-            f"🏏 {team_name} will bat first!\n\n"
-            f"Let the game begin! 🎉"
-        )
+        await client.send_message(chat_id, f"✅ Match set! {overs} overs per side.\n\n🚀 Match is starting...\n🏏 {team_name} will bat first!\n\nLet the game begin! 🎉")
         
         game["match_start_time"] = datetime.now()
         game["status"] = "playing"
@@ -1291,7 +1634,6 @@ Who will be the game host for this match? 🤔"""
         bowler_clickable = f"[{game['current_bowler']['name']}](tg://user?id={game['current_bowler']['id']})"
         
         await client.send_message(chat_id, f"🏏 **Team {team} Batting**\n\nBatter: {batter_clickable}\nBowler: {bowler_clickable}")
-        
         await send_bowling_video_team(client, chat_id, game["current_bowler"])
 
     # ================= ADD TO TEAM A/B =================
@@ -1325,11 +1667,11 @@ Who will be the game host for this match? 🤔"""
             await message.reply("❌ Usage: /add_A @username or reply to a user's message")
             return
         
-        if added_user.id in [p["id"] for p in game["team_a"]]:
+        if any(p["id"] == added_user.id for p in game["team_a"]):
             await message.reply(f"❌ {added_user.first_name} already in Team A!")
             return
         
-        if added_user.id in [p["id"] for p in game["team_b"]]:
+        if any(p["id"] == added_user.id for p in game["team_b"]):
             await message.reply(f"❌ {added_user.first_name} already in Team B!")
             return
         
@@ -1372,11 +1714,11 @@ Who will be the game host for this match? 🤔"""
             await message.reply("❌ Usage: /add_B @username or reply to a user's message")
             return
         
-        if added_user.id in [p["id"] for p in game["team_b"]]:
+        if any(p["id"] == added_user.id for p in game["team_b"]):
             await message.reply(f"❌ {added_user.first_name} already in Team B!")
             return
         
-        if added_user.id in [p["id"] for p in game["team_a"]]:
+        if any(p["id"] == added_user.id for p in game["team_a"]):
             await message.reply(f"❌ {added_user.first_name} already in Team A!")
             return
         
@@ -1411,18 +1753,10 @@ Who will be the game host for this match? 🤔"""
         user_to_shift = message.reply_to_message.from_user
         username_display = f"@{user_to_shift.username}" if user_to_shift.username else user_to_shift.first_name
         
-        in_team_a = False
-        for p in game["team_a"]:
-            if p["id"] == user_to_shift.id:
-                in_team_a = True
-                break
+        in_team_a = any(p["id"] == user_to_shift.id for p in game["team_a"])
         
         if not in_team_a:
-            in_team_b = False
-            for p in game["team_b"]:
-                if p["id"] == user_to_shift.id:
-                    in_team_b = True
-                    break
+            in_team_b = any(p["id"] == user_to_shift.id for p in game["team_b"])
             if not in_team_b:
                 await message.reply(f"❌ {username_display} is not in any team!")
                 return
@@ -1433,17 +1767,11 @@ Who will be the game host for this match? 🤔"""
             target_team = "B"
         
         keyboard = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(f"Confirm shift to Team {target_team}", callback_data=f"shift_confirm_{user_to_shift.id}_{current_team}_{target_team}"),
-                InlineKeyboardButton("Cancel", callback_data="shift_cancel")
-            ]
+            [InlineKeyboardButton(f"Confirm shift to Team {target_team}", callback_data=f"shift_confirm_{user_to_shift.id}_{current_team}_{target_team}"),
+             InlineKeyboardButton("Cancel", callback_data="shift_cancel")]
         ])
         
-        await message.reply(
-            f"🔄 {username_display} is currently in Team {current_team}.\n"
-            f"Do you want to shift them to Team {target_team}?",
-            reply_markup=keyboard
-        )
+        await message.reply(f"🔄 {username_display} is currently in Team {current_team}.\nDo you want to shift them to Team {target_team}?", reply_markup=keyboard)
 
     @app.on_callback_query(filters.regex("^shift_confirm_"))
     async def shift_confirm_callback(client, callback):
@@ -1486,11 +1814,7 @@ Who will be the game host for this match? 🤔"""
         username_display = f"@{player['username']}" if player['username'] else player['name']
         
         await callback.message.delete()
-        await callback.message.reply(
-            f"🔄 {username_display} shifted from Team {current_team} to Team {target_team}!\n\n"
-            f"🏏 Team A: {len(game['team_a'])} players\n"
-            f"🏏 Team B: {len(game['team_b'])} players"
-        )
+        await callback.message.reply(f"🔄 {username_display} shifted from Team {current_team} to Team {target_team}!\n\n🏏 Team A: {len(game['team_a'])} players\n🏏 Team B: {len(game['team_b'])} players")
         await callback.answer("✅ Player shifted successfully!")
 
     @app.on_callback_query(filters.regex("^shift_cancel$"))
@@ -1512,7 +1836,7 @@ Who will be the game host for this match? 🤔"""
         
         num = int(text)
         
-        # Check solo mode games
+        # Solo mode
         for chat_id, game in games.items():
             if game.get("status") != "playing" or game.get("game_over"):
                 continue
@@ -1531,14 +1855,10 @@ Who will be the game host for this match? 🤔"""
             
             batter = game["current_batter"]
             batter_clickable = f"[{batter['name']}](tg://user?id={batter['id']})"
-            await client.send_video(
-                chat_id, 
-                BATTING_VIDEO,
-                caption=f"Hey {batter_clickable}, now you're batting! Send number (1-6) in GROUP"
-            )
+            await client.send_video(chat_id, BATTING_VIDEO, caption=f"Hey {batter_clickable}, now you're batting! Send number (1-6) in GROUP")
             return
         
-        # Check team mode games
+        # Team mode
         for chat_id, game in team_games.items():
             if game.get("status") != "playing" or game.get("game_over"):
                 continue
@@ -1557,10 +1877,7 @@ Who will be the game host for this match? 🤔"""
             
             batter = game["current_batter"]
             batter_clickable = f"[{batter['name']}](tg://user?id={batter['id']})"
-            await client.send_message(
-                chat_id,
-                f"🎯 Bowler bowled {num}! Now {batter_clickable}, send your batting number (1-6) in GROUP"
-            )
+            await client.send_message(chat_id, f"🎯 Bowler bowled {num}! Now {batter_clickable}, send your batting number (1-6) in GROUP")
             return
         
         await message.reply("❌ No active game found where you are the bowler!")
@@ -1570,7 +1887,7 @@ Who will be the game host for this match? 🤔"""
     async def batting_msg(client, message):
         chat_id = message.chat.id
         
-        # Check solo mode
+        # Solo mode
         game = games.get(chat_id)
         if game:
             if game.get("status") != "playing" or game.get("game_over") or game.get("bowling_number") is None:
@@ -1584,7 +1901,6 @@ Who will be the game host for this match? 🤔"""
             if not text.isdigit() or int(text) not in range(1, 7):
                 return await message.reply(INVALID_NUMBER)
             
-            # Reply with 👍 emoji
             try:
                 await message.reply("👍")
             except:
@@ -1594,57 +1910,42 @@ Who will be the game host for this match? 🤔"""
             result = play_ball(chat_id, bat)
             bow = game.get("bowling_number", "?")
             game["bowling_number"] = None
-            
             bowler = game["current_bowler"]
             
             if result["type"] == "out":
-                # OUT video with caption
                 try:
-                    await message.reply_video(OUT_VIDEO, caption=OUT_MESSAGE.format(
-                        batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
+                    await message.reply_video(OUT_VIDEO, caption=OUT_MESSAGE.format(batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
                 except:
-                    await message.reply(OUT_MESSAGE.format(
-                        batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
+                    await message.reply(OUT_MESSAGE.format(batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
                 
                 if game.get("game_over"):
-                    final_text = build_scoreboard(game["players"], is_final=True)
-                    await message.reply(final_text)
+                    await message.reply(build_scoreboard(game["players"], is_final=True))
                     if chat_id in games:
                         del games[chat_id]
                     return
                 
                 await message.reply(build_scoreboard(game["players"], is_final=False))
                 
-                # Show next batter and bowler
                 new_batter = game["current_batter"]
                 new_bowler = game["current_bowler"]
-                new_batter_clickable = f"[{new_batter['name']}](tg://user?id={new_batter['id']})"
-                new_bowler_clickable = f"[{new_bowler['name']}](tg://user?id={new_bowler['id']})"
-                await client.send_message(chat_id, f"🎯 New batter: {new_batter_clickable}\n🎯 New bowler: {new_bowler_clickable}")
-                
-                if not game.get("game_over"):
-                    await send_bowling_video(client, chat_id, game["current_bowler"])
-                
+                await client.send_message(chat_id, f"🎯 New batter: [{new_batter['name']}](tg://user?id={new_batter['id']})\n🎯 New bowler: [{new_bowler['name']}](tg://user?id={new_bowler['id']})")
+                await send_bowling_video(client, chat_id, game["current_bowler"])
             else:
-                # ✅ RUN VIDEO - NO CAPTION, ONLY VIDEO
                 try:
                     await message.reply_video(get_run_video(result["runs"]))
                 except:
                     await message.reply_video(get_run_video(result["runs"]))
                 
                 if not game.get("game_over"):
-                    # Same bowler continues for remaining balls
                     await send_bowling_video(client, chat_id, bowler)
             return
         
-        # Check team mode (similar changes for team mode)
+        # Team mode
         team_game = team_games.get(chat_id)
         if not team_game:
             return
         
-        if team_game.get("status") != "playing" or team_game.get("game_over"):
-            return
-        if team_game.get("bowling_number") is None:
+        if team_game.get("status") != "playing" or team_game.get("game_over") or team_game.get("bowling_number") is None:
             return
         
         batter = team_game.get("current_batter")
@@ -1655,7 +1956,6 @@ Who will be the game host for this match? 🤔"""
         if not text.isdigit() or int(text) not in range(1, 7):
             return await message.reply(INVALID_NUMBER)
         
-        # Reply with 👍 emoji
         try:
             await message.reply("👍")
         except:
@@ -1664,7 +1964,6 @@ Who will be the game host for this match? 🤔"""
         bat = int(text)
         bow = team_game.get("bowling_number", "?")
         team_game["bowling_number"] = None
-        
         bowler = team_game["current_bowler"]
         team_key = f"team_{team_game['current_team'].lower()}"
         
@@ -1673,15 +1972,13 @@ Who will be the game host for this match? 🤔"""
             team_game["team_wickets"] += 1
             
             try:
-                await message.reply_video(OUT_VIDEO, caption=OUT_MESSAGE.format(
-                    batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
+                await message.reply_video(OUT_VIDEO, caption=OUT_MESSAGE.format(batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
             except:
-                await message.reply(OUT_MESSAGE.format(
-                    batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
+                await message.reply(OUT_MESSAGE.format(batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
             
             active_batters = [p for p in team_game[team_key] if not p.get("out", False)]
             
-            if len(active_batters) == 0 or team_game["team_wickets"] >= len(team_game[team_key]):
+            if not active_batters or team_game["team_wickets"] >= len(team_game[team_key]):
                 team_game["status"] = "innings_break"
                 
                 if team_game["current_team"] == "A":
@@ -1702,7 +1999,6 @@ Who will be the game host for this match? 🤔"""
                     
                     team_game["game_over"] = True
                     team_game["winner"] = winner
-                    
                     await client.send_message(chat_id, build_team_scoreboard(team_game))
                     await client.send_message(chat_id, f"🏆 **Match Over!**\n\nWinner: {winner}\n\nTeam A: {team_game['team_a_score']}/{team_game['team_a_wickets']}\nTeam B: {team_game['team_b_score']}/{team_game['team_b_wickets']}")
                     
@@ -1712,6 +2008,7 @@ Who will be the game host for this match? 🤔"""
                         del team_hosts[chat_id]
                 return
             
+            # Find next batter
             next_batter_index = team_game["current_batter_index"] + 1
             for i in range(next_batter_index, len(team_game[team_key])):
                 if not team_game[team_key][i].get("out", False):
@@ -1721,7 +2018,6 @@ Who will be the game host for this match? 🤔"""
                     break
             
             await client.send_message(chat_id, build_team_scoreboard(team_game))
-            
             team_game["current_bowler_balls"] += 1
             team_game["total_balls_in_inning"] += 1
             
@@ -1734,7 +2030,6 @@ Who will be the game host for this match? 🤔"""
                 await client.send_message(chat_id, f"🔄 New bowler: [{team_game['current_bowler']['name']}](tg://user?id={team_game['current_bowler']['id']})")
             
             await send_bowling_video_team(client, chat_id, team_game["current_bowler"])
-            
         else:
             runs = bat
             batter["score"] += runs
@@ -1744,11 +2039,9 @@ Who will be the game host for this match? 🤔"""
             elif runs == 6:
                 batter["sixes"] += 1
             batter["history"].append(f"{runs}")
-            
             team_game["team_total"] += runs
             team_game["total_balls_in_inning"] += 1
             
-            # ✅ RUN VIDEO - NO CAPTION, ONLY VIDEO
             try:
                 await message.reply_video(get_run_video(runs))
             except:
@@ -1758,9 +2051,8 @@ Who will be the game host for this match? 🤔"""
                 team_game["team_b_score"] = team_game["team_total"]
                 team_game["game_over"] = True
                 team_game["winner"] = "Team B"
-                
                 await client.send_message(chat_id, build_team_scoreboard(team_game))
-                await client.send_message(chat_id, f"🏆 **Team B Wins!**\n\nTarget: {team_game['team_a_score'] + 1}\nTeam B: {team_game['team_b_score']}\n\nTeam B wins by {len(team_game[team_key]) - team_game['team_wickets']} wickets!")
+                await client.send_message(chat_id, f"🏆 **Team B Wins!**\n\nTarget: {team_game['team_a_score'] + 1}\nTeam B: {team_game['team_b_score']}\n\nTeam B wins!")
                 
                 if chat_id in team_games:
                     del team_games[chat_id]
@@ -1769,7 +2061,6 @@ Who will be the game host for this match? 🤔"""
                 return
             
             await client.send_message(chat_id, build_team_scoreboard(team_game))
-            
             team_game["current_bowler_balls"] += 1
             
             if team_game["current_bowler_balls"] >= 6:
@@ -1792,23 +2083,12 @@ Who will be the game host for this match? 🤔"""
         
         active_votes[chat_id] = {"active": True, "count": 0, "users": [], "msg_id": None}
         
-        caption = """🗳️ **VOTING REQUIRED!** 🗳️
-
-You are not an admin. 3 votes needed.
-
-Current votes: 0/3"""
+        caption = "🗳️ **VOTING REQUIRED!** 🗳️\n\nYou are not an admin. 3 votes needed.\n\nCurrent votes: 0/3"
         
         try:
-            msg = await message.reply_photo(
-                VOTE_IMG, 
-                caption=caption,
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]])
-            )
+            msg = await message.reply_photo(VOTE_IMG, caption=caption, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]]))
         except:
-            msg = await message.reply(
-                caption,
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]])
-            )
+            msg = await message.reply(caption, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]]))
         
         active_votes[chat_id]["msg_id"] = msg.id
         asyncio.create_task(auto_cancel_vote(client, chat_id))
@@ -1828,40 +2108,26 @@ Current votes: 0/3"""
         vote["users"].append(user.id)
         vote["count"] += 1
         
-        voters = []
-        for uid in vote["users"]:
-            try:
-                u = await client.get_users(uid)
-                name = u.first_name if u.first_name else f"User_{uid}"
-                voters.append(f"• {name}")
-            except:
-                voters.append(f"• User_{uid}")
-        
         if vote["count"] >= 3:
             await callback.message.delete()
             await select_game_menu(client, callback.message)
             vote["active"] = False
             await callback.answer("Voting successful!")
         else:
-            caption = f"""🗳️ **VOTING REQUIRED!** 🗳️
-
-You are not an admin. 3 votes needed.
-
-Current votes: {vote['count']}/3
-
-**Voters:**
-{chr(10).join(voters)}"""
+            voters = []
+            for uid in vote["users"]:
+                try:
+                    u = await client.get_users(uid)
+                    voters.append(f"• {u.first_name}")
+                except:
+                    voters.append(f"• User_{uid}")
+            
+            caption = f"🗳️ **VOTING REQUIRED!** 🗳️\n\nYou are not an admin. 3 votes needed.\n\nCurrent votes: {vote['count']}/3\n\n**Voters:**\n{chr(10).join(voters)}"
             
             try:
-                await callback.message.edit_caption(
-                    caption=caption,
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]])
-                )
+                await callback.message.edit_caption(caption=caption, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]]))
             except:
-                await callback.message.edit_text(
-                    caption,
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]])
-                )
+                await callback.message.edit_text(caption, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]]))
             await callback.answer(f"Voted! ({vote['count']}/3)")
 
     async def auto_cancel_vote(client, chat_id):
@@ -1869,10 +2135,7 @@ Current votes: {vote['count']}/3
         vote = active_votes.get(chat_id)
         if vote and vote.get("active") and vote["count"] < 3:
             try:
-                await client.edit_message_caption(
-                    chat_id, vote["msg_id"],
-                    caption=f"❌ Voting expired! Got {vote['count']}/3 votes.\nUse /start again."
-                )
+                await client.edit_message_caption(chat_id, vote["msg_id"], caption=f"❌ Voting expired! Got {vote['count']}/3 votes.\nUse /start again.")
             except:
                 pass
             vote["active"] = False
