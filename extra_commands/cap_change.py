@@ -1,5 +1,6 @@
 from pyrogram import filters
 from pyrogram.types import Message
+from solo.handlers import team_games, team_hosts
 
 def register_cap_change(app):
     
