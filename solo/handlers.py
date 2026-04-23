@@ -346,8 +346,8 @@ def register_handlers(app):
 🏏 **Enjoy the game!** 🏏"""
         
         await message.reply(help_text)
-
-    # ================= USER INFO COMMAND ================
+      
+    # ================= USER INFO COMMAND =================
     @app.on_message(filters.command("user_info") & filters.group)
     async def user_info_cmd(client, message: Message):
         user = message.from_user
@@ -388,51 +388,36 @@ def register_handlers(app):
         
         # Create clickable user mention
         if username:
-            user_mention = f"<a href='tg://user?id={user_id}'>@{username}</a>"
+            user_mention = f'<a href="tg://user?id={user_id}">@{username}</a>'
         else:
-            user_mention = f"<a href='tg://user?id={user_id}'>{name}</a>"
+            user_mention = f'<a href="tg://user?id={user_id}">{name}</a>'
         
-        # Prepare stats text with monospace font
-        stats_text = f"""<code>
-🏏 STATS SUMMARY
-━━━━━━━━━━━━━━━━━━━━━━━━━
+        # Prepare stats text - Using backticks for monospace (no HTML parse mode)
+        stats_text = f"""`🏏 Stats Summary
+👤 User: {user_mention}
+🆔 User ID: {user_id}
+📅 Date: {datetime.now().strftime('%Y-%m-%d')}
+─────⊱◈◈◈⊰─────
+🏆 Highest Score: {highest_score}({highest_score_balls} Balls)
+🎮 Best Game Host: {best_game_host}
+📊 Runs: {total_runs} ({matches_played})
+🎯 Wickets: {wickets}
+💥 Sixes: {sixes}
+✨ Fours: {fours}
+🔥 Centuries: {centuries}
+⭐ Fifties: {fifties}
+🦆 Ducks: {ducks}
+🎩 Hat-Tricks: {hat_tricks}
+⚡ Strike Rate: {strike_rate}
+🎯 Economy Rate: {economy_rate}
+─────⊱◈◈◈⊰─────
+🏅 Man of the Match: {man_of_match}
 
-👤 User     : {user_mention}
-🆔 User ID  : {user_id}
-📅 Date     : {datetime.now().strftime('%Y-%m-%d')}
+ ╰⊚(🏏:{wickets}) + (⚾:{sixes})
 
-━━━━━━━━━━━━━━━━━━━━━━━━━
-BATTING STATS
-━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🏆 Highest Score    : {highest_score} ({highest_score_balls} balls)
-📊 Total Runs       : {total_runs}
-🎯 Matches Played   : {matches_played}
-⚡ Strike Rate      : {strike_rate}
-💥 Sixes            : {sixes}
-✨ Fours            : {fours}
-🔥 Centuries        : {centuries}
-⭐ Fifties          : {fifties}
-🦆 Ducks            : {ducks}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━
-BOWLING STATS
-━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🎯 Wickets          : {wickets}
-🎯 Economy Rate     : {economy_rate}
-🎩 Hat-Tricks       : {hat_tricks}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━
-ACHIEVEMENTS
-━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🏅 Man of the Match : {man_of_match}
-🧢 Best Captain     : {best_captain}
-🎮 Best Game Host   : {best_game_host}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━
-</code>"""
+─────⊱◈◈◈⊰─────
+🧢 Best captain: {best_captain} (🏆: N/A)
+ ╰⊚(🏆: {man_of_match}) + (😞:{ducks})`"""
         
         # Send image with spoiler and caption
         try:
@@ -442,7 +427,7 @@ ACHIEVEMENTS
                     USER_STATS_IMAGE,
                     caption=stats_text,
                     has_spoiler=True,
-                    parse_mode="HTML"
+                    parse_mode="Markdown"
                 )
             else:
                 await client.send_photo(
@@ -450,12 +435,13 @@ ACHIEVEMENTS
                     USER_STATS_IMAGE,
                     caption=stats_text,
                     has_spoiler=True,
-                    parse_mode="HTML"
+                    parse_mode="Markdown"
                 )
         except Exception as e:
             print(f"Error sending image: {e}")
-            await message.reply(stats_text, parse_mode="HTML")
-
+            # Fallback - send without image
+            await message.reply(stats_text, parse_mode="Markdown")
+            
     # ================= USER RANKS COMMAND =================
     @app.on_message(filters.command("user_ranks") & filters.group)
     async def user_ranks_cmd(client, message: Message):
