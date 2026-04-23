@@ -31,7 +31,7 @@ async def is_admin(client, chat_id, user_id):
         return False
 
 
-# ================= SOLO MODE SEND BOWLING VIDEO (DEFINE FIRST - BEFORE TIMEOUT) =================
+# ================= SOLO MODE SEND BOWLING VIDEO =================
 async def send_bowling_video(client, chat_id, bowler):
     game = games.get(chat_id)
     if not game or game.get("status") != "playing" or game.get("game_over"):
@@ -71,7 +71,7 @@ async def send_bowling_video(client, chat_id, bowler):
     bowling_tasks[chat_id] = task
 
 
-# ================= SOLO MODE TIMEOUT (No Bowler Change) =================
+# ================= SOLO MODE TIMEOUT =================
 async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, message_id):
     await asyncio.sleep(30)
     game = games.get(chat_id)
@@ -131,7 +131,7 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
             game["current_bowler_balls"] += 1
             game["total_balls_in_match"] += 1
             
-            # ✅ SAME BOWLER CONTINUES - No bowler change
+            # Same bowler continues
             await send_bowling_video(client, chat_id, game["current_bowler"])
     
     if chat_id in bowling_tasks:
@@ -1299,8 +1299,9 @@ Who will be the game host for this match? 🤔"""
             if not text.isdigit() or int(text) not in range(1, 7):
                 return await message.reply(INVALID_NUMBER)
             
+            # ✅ Reply with 👍 emoji
             try:
-                await client.send_reaction(message.chat.id, message.id, "👍")
+                await message.reply("👍")
             except:
                 pass
             
@@ -1329,13 +1330,32 @@ Who will be the game host for this match? 🤔"""
                 
                 await message.reply(build_scoreboard(game["players"], is_final=False))
                 
-                new_batter = game["current_batter"]
-                await client.send_message(chat_id, f"🎯 Hey [{new_batter['name']}](tg://user?id={new_batter['id']}), now you're batter!")
-                await client.send_message(chat_id, f"New batsman: [{new_batter['name']}](tg://user?id={new_batter['id']})\n\nGet ready for the next ball ⚾")
+                # ✅ SWAP: Out hone wala batsman ab bowler banega, aur bowler ab batsman banega
+                old_bowler = game["current_bowler"].copy()
+                old_batter = game["current_batter"].copy()
+                
+                # Swap roles
+                game["current_batter"] = old_bowler
+                game["current_bowler"] = old_batter
+                
+                # Update indices
+                for i, p in enumerate(game["players"]):
+                    if p["id"] == old_bowler["id"]:
+                        game["current_bowler_index"] = i
+                    if p["id"] == old_batter["id"]:
+                        game["current_batter_index"] = i
+                
+                # Reset bowler balls count
+                game["current_bowler_balls"] = 0
+                
+                await client.send_message(chat_id, f"🔄 **ROLE SWAP!** 🔄\n\n"
+                                            f"⚾ {old_batter['name']} is OUT! Now they become the BOWLER!\n"
+                                            f"🏏 {old_bowler['name']} now comes in to BAT!\n\n"
+                                            f"New Batter: [{game['current_batter']['name']}](tg://user?id={game['current_batter']['id']})\n"
+                                            f"New Bowler: [{game['current_bowler']['name']}](tg://user?id={game['current_bowler']['id']})")
                 
                 if not game.get("game_over"):
-                    new_bowler = game["current_bowler"]
-                    await send_bowling_video(client, chat_id, new_bowler)
+                    await send_bowling_video(client, chat_id, game["current_bowler"])
                 
             else:
                 try:
@@ -1348,11 +1368,11 @@ Who will be the game host for this match? 🤔"""
                         bat=bat, bowler=bowler["name"], bowl=bow))
                 
                 if not game.get("game_over"):
-                    # ✅ SAME BOWLER CONTINUES - No bowler change in solo mode
+                    # Same bowler continues
                     await send_bowling_video(client, chat_id, bowler)
             return
         
-        # Check team mode
+        # Check team mode (rest of team mode code remains same...)
         team_game = team_games.get(chat_id)
         if not team_game:
             return
@@ -1370,8 +1390,9 @@ Who will be the game host for this match? 🤔"""
         if not text.isdigit() or int(text) not in range(1, 7):
             return await message.reply(INVALID_NUMBER)
         
+        # ✅ Reply with 👍 emoji
         try:
-            await client.send_reaction(message.chat.id, message.id, "👍")
+            await message.reply("👍")
         except:
             pass
         
