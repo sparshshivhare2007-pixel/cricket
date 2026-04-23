@@ -273,7 +273,6 @@ def build_team_scoreboard(game):
 
 def register_handlers(app):
 
-    # ================= START GROUP =================
     @app.on_message(filters.command("start") & filters.group)
     async def start_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -284,12 +283,10 @@ def register_handlers(app):
         else:
             await vote_system(client, message)
 
-    # ================= SCORE COMMAND =================
     @app.on_message(filters.command("score") & filters.group)
     async def score_cmd(client, message: Message):
         await get_live_score(client, message)
 
-    # ================= HELP COMMAND =================
     @app.on_message(filters.command("help") & filters.group)
     async def help_cmd(client, message: Message):
         help_text = """🏏 **Cricket Game Bot Commands** 🏏
@@ -347,7 +344,6 @@ def register_handlers(app):
         
         await message.reply(help_text)
           
-    # ================= USER INFO COMMAND =================
     @app.on_message(filters.command("user_info") & filters.group)
     async def user_info_cmd(client, message: Message):
         from pyrogram.enums import ParseMode
@@ -357,13 +353,9 @@ def register_handlers(app):
         name = user.first_name
         username = user.username
         
-        # Get or create user from database
         from database import get_or_create_user
-        
-        # Ensure user exists in database
         user_data = await get_or_create_user(user_id, name, username)
         
-        # Get stats from database
         highest_score = user_data.get("highest_score", 0)
         highest_score_balls = user_data.get("highest_score_balls", 0)
         best_game_host = user_data.get("best_game_host", 0)
@@ -382,19 +374,14 @@ def register_handlers(app):
         runs_conceded = user_data.get("runs_conceded", 0)
         overs_bowled = user_data.get("overs_bowled", 0)
         
-        # Calculate strike rate
         strike_rate = round((total_runs / total_balls) * 100, 2) if total_balls > 0 else 0.0
-        
-        # Calculate economy rate
         economy_rate = round((runs_conceded / overs_bowled), 2) if overs_bowled > 0 else 0.0
         
-        # Create clickable user mention
         if username:
             user_mention = f'<a href="tg://user?id={user_id}">@{username}</a>'
         else:
             user_mention = f'<a href="tg://user?id={user_id}">{name}</a>'
         
-        # Prepare stats text
         stats_text = f"""🏏 Stats Summary
 👤 User: {user_mention}
 🆔 User ID: {user_id}
@@ -421,309 +408,49 @@ def register_handlers(app):
 🧢 Best captain: {best_captain} (🏆: N/A)
  ╰⊚(🏆: {man_of_match}) + (😞:{ducks})"""
         
-        # Send image with spoiler and caption
         try:
-            if USER_STATS_IMAGE.startswith(('http://', 'https://')):
-                await client.send_photo(
-                    message.chat.id,
-                    USER_STATS_IMAGE,
-                    caption=stats_text,
-                    has_spoiler=True,
-                    parse_mode=ParseMode.HTML
-                )
-            else:
-                await client.send_photo(
-                    message.chat.id,
-                    USER_STATS_IMAGE,
-                    caption=stats_text,
-                    has_spoiler=True,
-                    parse_mode=ParseMode.HTML
-                )
+            await client.send_photo(
+                message.chat.id,
+                USER_STATS_IMAGE,
+                caption=stats_text,
+                has_spoiler=True,
+                parse_mode=ParseMode.HTML
+            )
         except Exception as e:
-            print(f"Error sending image: {e}")
-            # Fallback - send without image and without HTML
+            print(f"Error: {e}")
             await message.reply(stats_text.replace(user_mention, f"@{username}" if username else name))
-    
-    # ================= USER RANKS COMMAND =================
+
     @app.on_message(filters.command("user_ranks") & filters.group)
     async def user_ranks_cmd(client, message: Message):
-    from pyrogram.enums import ParseMode
-    from database import get_or_create_user
-    
-    user = message.from_user
-    user_id = user.id
-    name = user.first_name
-    username = user.username
-    
-    # Get user data from database
-    user_data = await get_or_create_user(user_id, name, username)
-    
-    # Get stats
-    highest_score = user_data.get("highest_score", 0)
-    highest_score_balls = user_data.get("highest_score_balls", 0)
-    best_game_host = user_data.get("best_game_host", 0)
-    total_runs = user_data.get("total_runs", 0)
-    total_balls = user_data.get("total_balls", 0)
-    wickets = user_data.get("wickets", 0)
-    sixes = user_data.get("sixes", 0)
-    fours = user_data.get("fours", 0)
-    centuries = user_data.get("centuries", 0)
-    fifties = user_data.get("fifties", 0)
-    ducks = user_data.get("ducks", 0)
-    hat_tricks = user_data.get("hat_tricks", 0)
-    man_of_match = user_data.get("man_of_match", 0)
-    best_captain = user_data.get("best_captain", 0)
-    matches_played = user_data.get("matches_played", 0)
-    
-    # Create clickable name
-    if username:
-        clickable_name = f'<a href="tg://user?id={user_id}">@{username}</a>'
-    else:
-        clickable_name = f'<a href="tg://user?id={user_id}">{name}</a>'
-    
-    # Prepare stats text
-    stats_text = f"""🏏 Stats for {clickable_name}
-📊 Runs: {total_runs} ({matches_played} matches)
-🎯 Wickets: {wickets}
-💥 Sixes: {sixes}
-✨ Fours: {fours}
-🔥 Centuries: {centuries}
-⭐ Fifties: {fifties}
-🦆 Ducks: {ducks}
-🎩 Hat-tricks: {hat_tricks}
-🏏 Highest Score: {highest_score} ({highest_score_balls} balls)
-🧑‍✈️ Best Game Host: {best_game_host}"""
-    
-    # Create 12 inline buttons
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("1 vs 1", callback_data="rank_1v1"),
-            InlineKeyboardButton("Highest Ducks", callback_data="rank_ducks")
-        ],
-        [
-            InlineKeyboardButton("Highest Scores", callback_data="rank_scores"),
-            InlineKeyboardButton("Highest Wickets", callback_data="rank_wickets")
-        ],
-        [
-            InlineKeyboardButton("Highest Sixes", callback_data="rank_sixes"),
-            InlineKeyboardButton("Highest Fours", callback_data="rank_fours")
-        ],
-        [
-            InlineKeyboardButton("Highest Fifties", callback_data="rank_fifties"),
-            InlineKeyboardButton("Highest Centuries", callback_data="rank_centuries")
-        ],
-        [
-            InlineKeyboardButton("Hat-tricks", callback_data="rank_hattricks"),
-            InlineKeyboardButton("Best Game Host", callback_data="rank_host")
-        ],
-        [
-            InlineKeyboardButton("Best Players", callback_data="rank_players"),
-            InlineKeyboardButton("Best Captains", callback_data="rank_captains")
-        ]
-    ])
-    
-    # Send image with stats and buttons
-    try:
-        await client.send_photo(
-            message.chat.id,
-            USER_RANKS_IMAGE,  # From config.py
-            caption=stats_text,
-            reply_markup=keyboard,
-            parse_mode=ParseMode.HTML
-        )
-    except Exception as e:
-        print(f"Error sending user ranks: {e}")
-        # Fallback - send without image
-        await message.reply(stats_text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
-
-# ================= RANK BUTTON HANDLERS =================
-@app.on_callback_query(filters.regex("^rank_"))
-async def rank_buttons_handler(client, callback: CallbackQuery):
-    from database import get_all_users_stats
-    
-    action = callback.data.split("_")[1]
-    chat_id = callback.message.chat.id
-    
-    # Get all users stats from database
-    all_users = await get_all_users_stats()
-    
-    if action == "1v1":
-        text = "🏆 **1 vs 1 Leaderboard**\n\nComing soon!"
+        from pyrogram.enums import ParseMode
+        from database import get_or_create_user
         
-    elif action == "ducks":
-        # Sort by ducks (most ducks first)
-        sorted_users = sorted(all_users, key=lambda x: x.get("ducks", 0), reverse=True)[:10]
-        text = "🦆 **Highest Ducks Leaderboard** 🦆\n\n"
-        for i, user in enumerate(sorted_users, 1):
-            if user.get("ducks", 0) > 0:
-                name = user.get("name", "Unknown")
-                text += f"{i}. {name}: {user.get('ducks', 0)} ducks\n"
-        if len(sorted_users) == 0 or all(u.get("ducks", 0) == 0 for u in sorted_users):
-            text += "No data available yet!"
-            
-    elif action == "scores":
-        # Sort by highest score
-        sorted_users = sorted(all_users, key=lambda x: x.get("highest_score", 0), reverse=True)[:10]
-        text = "🏏 **Highest Scores Leaderboard** 🏏\n\n"
-        for i, user in enumerate(sorted_users, 1):
-            if user.get("highest_score", 0) > 0:
-                name = user.get("name", "Unknown")
-                score = user.get("highest_score", 0)
-                balls = user.get("highest_score_balls", 0)
-                text += f"{i}. {name}: {score} ({balls} balls)\n"
-        if len(sorted_users) == 0 or all(u.get("highest_score", 0) == 0 for u in sorted_users):
-            text += "No data available yet!"
-            
-    elif action == "wickets":
-        # Sort by wickets
-        sorted_users = sorted(all_users, key=lambda x: x.get("wickets", 0), reverse=True)[:10]
-        text = "🎯 **Highest Wickets Leaderboard** 🎯\n\n"
-        for i, user in enumerate(sorted_users, 1):
-            if user.get("wickets", 0) > 0:
-                name = user.get("name", "Unknown")
-                text += f"{i}. {name}: {user.get('wickets', 0)} wickets\n"
-        if len(sorted_users) == 0 or all(u.get("wickets", 0) == 0 for u in sorted_users):
-            text += "No data available yet!"
-            
-    elif action == "sixes":
-        # Sort by sixes
-        sorted_users = sorted(all_users, key=lambda x: x.get("sixes", 0), reverse=True)[:10]
-        text = "💥 **Highest Sixes Leaderboard** 💥\n\n"
-        for i, user in enumerate(sorted_users, 1):
-            if user.get("sixes", 0) > 0:
-                name = user.get("name", "Unknown")
-                text += f"{i}. {name}: {user.get('sixes', 0)} sixes\n"
-        if len(sorted_users) == 0 or all(u.get("sixes", 0) == 0 for u in sorted_users):
-            text += "No data available yet!"
-            
-    elif action == "fours":
-        # Sort by fours
-        sorted_users = sorted(all_users, key=lambda x: x.get("fours", 0), reverse=True)[:10]
-        text = "✨ **Highest Fours Leaderboard** ✨\n\n"
-        for i, user in enumerate(sorted_users, 1):
-            if user.get("fours", 0) > 0:
-                name = user.get("name", "Unknown")
-                text += f"{i}. {name}: {user.get('fours', 0)} fours\n"
-        if len(sorted_users) == 0 or all(u.get("fours", 0) == 0 for u in sorted_users):
-            text += "No data available yet!"
-            
-    elif action == "fifties":
-        # Sort by fifties
-        sorted_users = sorted(all_users, key=lambda x: x.get("fifties", 0), reverse=True)[:10]
-        text = "⭐ **Highest Fifties Leaderboard** ⭐\n\n"
-        for i, user in enumerate(sorted_users, 1):
-            if user.get("fifties", 0) > 0:
-                name = user.get("name", "Unknown")
-                text += f"{i}. {name}: {user.get('fifties', 0)} fifties\n"
-        if len(sorted_users) == 0 or all(u.get("fifties", 0) == 0 for u in sorted_users):
-            text += "No data available yet!"
-            
-    elif action == "centuries":
-        # Sort by centuries
-        sorted_users = sorted(all_users, key=lambda x: x.get("centuries", 0), reverse=True)[:10]
-        text = "🔥 **Highest Centuries Leaderboard** 🔥\n\n"
-        for i, user in enumerate(sorted_users, 1):
-            if user.get("centuries", 0) > 0:
-                name = user.get("name", "Unknown")
-                text += f"{i}. {name}: {user.get('centuries', 0)} centuries\n"
-        if len(sorted_users) == 0 or all(u.get("centuries", 0) == 0 for u in sorted_users):
-            text += "No data available yet!"
-            
-    elif action == "hattricks":
-        # Sort by hat-tricks
-        sorted_users = sorted(all_users, key=lambda x: x.get("hat_tricks", 0), reverse=True)[:10]
-        text = "🎩 **Hat-tricks Leaderboard** 🎩\n\n"
-        for i, user in enumerate(sorted_users, 1):
-            if user.get("hat_tricks", 0) > 0:
-                name = user.get("name", "Unknown")
-                text += f"{i}. {name}: {user.get('hat_tricks', 0)} hat-tricks\n"
-        if len(sorted_users) == 0 or all(u.get("hat_tricks", 0) == 0 for u in sorted_users):
-            text += "No data available yet!"
-            
-    elif action == "host":
-        # Sort by best game host
-        sorted_users = sorted(all_users, key=lambda x: x.get("best_game_host", 0), reverse=True)[:10]
-        text = "🎮 **Best Game Host Leaderboard** 🎮\n\n"
-        for i, user in enumerate(sorted_users, 1):
-            if user.get("best_game_host", 0) > 0:
-                name = user.get("name", "Unknown")
-                text += f"{i}. {name}: {user.get('best_game_host', 0)} times\n"
-        if len(sorted_users) == 0 or all(u.get("best_game_host", 0) == 0 for u in sorted_users):
-            text += "No data available yet!"
-            
-    elif action == "players":
-        # Sort by total runs
-        sorted_users = sorted(all_users, key=lambda x: x.get("total_runs", 0), reverse=True)[:10]
-        text = "🏆 **Best Players (Most Runs)** 🏆\n\n"
-        for i, user in enumerate(sorted_users, 1):
-            if user.get("total_runs", 0) > 0:
-                name = user.get("name", "Unknown")
-                text += f"{i}. {name}: {user.get('total_runs', 0)} runs\n"
-        if len(sorted_users) == 0 or all(u.get("total_runs", 0) == 0 for u in sorted_users):
-            text += "No data available yet!"
-            
-    elif action == "captains":
-        # Sort by best captain
-        sorted_users = sorted(all_users, key=lambda x: x.get("best_captain", 0), reverse=True)[:10]
-        text = "🧢 **Best Captains Leaderboard** 🧢\n\n"
-        for i, user in enumerate(sorted_users, 1):
-            if user.get("best_captain", 0) > 0:
-                name = user.get("name", "Unknown")
-                text += f"{i}. {name}: {user.get('best_captain', 0)} wins\n"
-        if len(sorted_users) == 0 or all(u.get("best_captain", 0) == 0 for u in sorted_users):
-            text += "No data available yet!"
-    
-    else:
-        text = "Coming soon!"
-    
-    # Create back button
-    back_button = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 Back to Stats", callback_data="back_to_ranks")]
-    ])
-    
-    await callback.message.edit_caption(
-        caption=text,
-        reply_markup=back_button,
-        parse_mode=ParseMode.HTML
-    )
-    await callback.answer()
-
-
-# ================= BACK TO RANKS BUTTON =================
-@app.on_callback_query(filters.regex("^back_to_ranks$"))
-async def back_to_ranks_callback(client, callback: CallbackQuery):
-    from database import get_or_create_user
-    
-    user = callback.from_user
-    user_id = user.id
-    name = user.first_name
-    username = user.username
-    
-    # Get user data
-    user_data = await get_or_create_user(user_id, name, username)
-    
-    # Get stats
-    highest_score = user_data.get("highest_score", 0)
-    highest_score_balls = user_data.get("highest_score_balls", 0)
-    best_game_host = user_data.get("best_game_host", 0)
-    total_runs = user_data.get("total_runs", 0)
-    matches_played = user_data.get("matches_played", 0)
-    wickets = user_data.get("wickets", 0)
-    sixes = user_data.get("sixes", 0)
-    fours = user_data.get("fours", 0)
-    centuries = user_data.get("centuries", 0)
-    fifties = user_data.get("fifties", 0)
-    ducks = user_data.get("ducks", 0)
-    hat_tricks = user_data.get("hat_tricks", 0)
-    
-    # Create clickable name
-    if username:
-        clickable_name = f'<a href="tg://user?id={user_id}">@{username}</a>'
-    else:
-        clickable_name = f'<a href="tg://user?id={user_id}">{name}</a>'
-    
-    # Prepare stats text
-    stats_text = f"""🏏 Stats for {clickable_name}
+        user = message.from_user
+        user_id = user.id
+        name = user.first_name
+        username = user.username
+        
+        user_data = await get_or_create_user(user_id, name, username)
+        
+        highest_score = user_data.get("highest_score", 0)
+        highest_score_balls = user_data.get("highest_score_balls", 0)
+        best_game_host = user_data.get("best_game_host", 0)
+        total_runs = user_data.get("total_runs", 0)
+        wickets = user_data.get("wickets", 0)
+        sixes = user_data.get("sixes", 0)
+        fours = user_data.get("fours", 0)
+        centuries = user_data.get("centuries", 0)
+        fifties = user_data.get("fifties", 0)
+        ducks = user_data.get("ducks", 0)
+        hat_tricks = user_data.get("hat_tricks", 0)
+        matches_played = user_data.get("matches_played", 0)
+        
+        if username:
+            clickable_name = f'<a href="tg://user?id={user_id}">@{username}</a>'
+        else:
+            clickable_name = f'<a href="tg://user?id={user_id}">{name}</a>'
+        
+        stats_text = f"""🏏 Stats for {clickable_name}
 📊 Runs: {total_runs} ({matches_played} matches)
 🎯 Wickets: {wickets}
 💥 Sixes: {sixes}
@@ -734,43 +461,189 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
 🎩 Hat-tricks: {hat_tricks}
 🏏 Highest Score: {highest_score} ({highest_score_balls} balls)
 🧑‍✈️ Best Game Host: {best_game_host}"""
-    
-    # Create buttons
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("1 vs 1", callback_data="rank_1v1"),
-            InlineKeyboardButton("Highest Ducks", callback_data="rank_ducks")
-        ],
-        [
-            InlineKeyboardButton("Highest Scores", callback_data="rank_scores"),
-            InlineKeyboardButton("Highest Wickets", callback_data="rank_wickets")
-        ],
-        [
-            InlineKeyboardButton("Highest Sixes", callback_data="rank_sixes"),
-            InlineKeyboardButton("Highest Fours", callback_data="rank_fours")
-        ],
-        [
-            InlineKeyboardButton("Highest Fifties", callback_data="rank_fifties"),
-            InlineKeyboardButton("Highest Centuries", callback_data="rank_centuries")
-        ],
-        [
-            InlineKeyboardButton("Hat-tricks", callback_data="rank_hattricks"),
-            InlineKeyboardButton("Best Game Host", callback_data="rank_host")
-        ],
-        [
-            InlineKeyboardButton("Best Players", callback_data="rank_players"),
-            InlineKeyboardButton("Best Captains", callback_data="rank_captains")
-        ]
-    ])
-    
-    await callback.message.edit_caption(
-        caption=stats_text,
-        reply_markup=keyboard,
-        parse_mode=ParseMode.HTML
-    )
-    await callback.answer()
-    
-    # ================= MEMBER LISTS COMMAND =================
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("1 vs 1", callback_data="rank_1v1"), InlineKeyboardButton("Highest Ducks", callback_data="rank_ducks")],
+            [InlineKeyboardButton("Highest Scores", callback_data="rank_scores"), InlineKeyboardButton("Highest Wickets", callback_data="rank_wickets")],
+            [InlineKeyboardButton("Highest Sixes", callback_data="rank_sixes"), InlineKeyboardButton("Highest Fours", callback_data="rank_fours")],
+            [InlineKeyboardButton("Highest Fifties", callback_data="rank_fifties"), InlineKeyboardButton("Highest Centuries", callback_data="rank_centuries")],
+            [InlineKeyboardButton("Hat-tricks", callback_data="rank_hattricks"), InlineKeyboardButton("Best Game Host", callback_data="rank_host")],
+            [InlineKeyboardButton("Best Players", callback_data="rank_players"), InlineKeyboardButton("Best Captains", callback_data="rank_captains")]
+        ])
+        
+        try:
+            await client.send_photo(
+                message.chat.id,
+                USER_RANKS_IMAGE,
+                caption=stats_text,
+                reply_markup=keyboard,
+                parse_mode=ParseMode.HTML
+            )
+        except Exception as e:
+            print(f"Error: {e}")
+            await message.reply(stats_text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+
+    @app.on_callback_query(filters.regex("^rank_"))
+    async def rank_buttons_handler(client, callback: CallbackQuery):
+        from database import get_all_users_stats
+        from pyrogram.enums import ParseMode
+        
+        action = callback.data.split("_")[1]
+        all_users = await get_all_users_stats()
+        
+        text = ""
+        if action == "1v1":
+            text = "🏆 **1 vs 1 Leaderboard**\n\nComing soon!"
+        elif action == "ducks":
+            sorted_users = sorted(all_users, key=lambda x: x.get("ducks", 0), reverse=True)[:10]
+            text = "🦆 **Highest Ducks Leaderboard** 🦆\n\n"
+            for i, user in enumerate(sorted_users, 1):
+                if user.get("ducks", 0) > 0:
+                    text += f"{i}. {user.get('name', 'Unknown')}: {user.get('ducks', 0)} ducks\n"
+            if text == "🦆 **Highest Ducks Leaderboard** 🦆\n\n":
+                text += "No data available yet!"
+        elif action == "scores":
+            sorted_users = sorted(all_users, key=lambda x: x.get("highest_score", 0), reverse=True)[:10]
+            text = "🏏 **Highest Scores Leaderboard** 🏏\n\n"
+            for i, user in enumerate(sorted_users, 1):
+                if user.get("highest_score", 0) > 0:
+                    text += f"{i}. {user.get('name', 'Unknown')}: {user.get('highest_score', 0)} ({user.get('highest_score_balls', 0)} balls)\n"
+            if text == "🏏 **Highest Scores Leaderboard** 🏏\n\n":
+                text += "No data available yet!"
+        elif action == "wickets":
+            sorted_users = sorted(all_users, key=lambda x: x.get("wickets", 0), reverse=True)[:10]
+            text = "🎯 **Highest Wickets Leaderboard** 🎯\n\n"
+            for i, user in enumerate(sorted_users, 1):
+                if user.get("wickets", 0) > 0:
+                    text += f"{i}. {user.get('name', 'Unknown')}: {user.get('wickets', 0)} wickets\n"
+            if text == "🎯 **Highest Wickets Leaderboard** 🎯\n\n":
+                text += "No data available yet!"
+        elif action == "sixes":
+            sorted_users = sorted(all_users, key=lambda x: x.get("sixes", 0), reverse=True)[:10]
+            text = "💥 **Highest Sixes Leaderboard** 💥\n\n"
+            for i, user in enumerate(sorted_users, 1):
+                if user.get("sixes", 0) > 0:
+                    text += f"{i}. {user.get('name', 'Unknown')}: {user.get('sixes', 0)} sixes\n"
+            if text == "💥 **Highest Sixes Leaderboard** 💥\n\n":
+                text += "No data available yet!"
+        elif action == "fours":
+            sorted_users = sorted(all_users, key=lambda x: x.get("fours", 0), reverse=True)[:10]
+            text = "✨ **Highest Fours Leaderboard** ✨\n\n"
+            for i, user in enumerate(sorted_users, 1):
+                if user.get("fours", 0) > 0:
+                    text += f"{i}. {user.get('name', 'Unknown')}: {user.get('fours', 0)} fours\n"
+            if text == "✨ **Highest Fours Leaderboard** ✨\n\n":
+                text += "No data available yet!"
+        elif action == "fifties":
+            sorted_users = sorted(all_users, key=lambda x: x.get("fifties", 0), reverse=True)[:10]
+            text = "⭐ **Highest Fifties Leaderboard** ⭐\n\n"
+            for i, user in enumerate(sorted_users, 1):
+                if user.get("fifties", 0) > 0:
+                    text += f"{i}. {user.get('name', 'Unknown')}: {user.get('fifties', 0)} fifties\n"
+            if text == "⭐ **Highest Fifties Leaderboard** ⭐\n\n":
+                text += "No data available yet!"
+        elif action == "centuries":
+            sorted_users = sorted(all_users, key=lambda x: x.get("centuries", 0), reverse=True)[:10]
+            text = "🔥 **Highest Centuries Leaderboard** 🔥\n\n"
+            for i, user in enumerate(sorted_users, 1):
+                if user.get("centuries", 0) > 0:
+                    text += f"{i}. {user.get('name', 'Unknown')}: {user.get('centuries', 0)} centuries\n"
+            if text == "🔥 **Highest Centuries Leaderboard** 🔥\n\n":
+                text += "No data available yet!"
+        elif action == "hattricks":
+            sorted_users = sorted(all_users, key=lambda x: x.get("hat_tricks", 0), reverse=True)[:10]
+            text = "🎩 **Hat-tricks Leaderboard** 🎩\n\n"
+            for i, user in enumerate(sorted_users, 1):
+                if user.get("hat_tricks", 0) > 0:
+                    text += f"{i}. {user.get('name', 'Unknown')}: {user.get('hat_tricks', 0)} hat-tricks\n"
+            if text == "🎩 **Hat-tricks Leaderboard** 🎩\n\n":
+                text += "No data available yet!"
+        elif action == "host":
+            sorted_users = sorted(all_users, key=lambda x: x.get("best_game_host", 0), reverse=True)[:10]
+            text = "🎮 **Best Game Host Leaderboard** 🎮\n\n"
+            for i, user in enumerate(sorted_users, 1):
+                if user.get("best_game_host", 0) > 0:
+                    text += f"{i}. {user.get('name', 'Unknown')}: {user.get('best_game_host', 0)} times\n"
+            if text == "🎮 **Best Game Host Leaderboard** 🎮\n\n":
+                text += "No data available yet!"
+        elif action == "players":
+            sorted_users = sorted(all_users, key=lambda x: x.get("total_runs", 0), reverse=True)[:10]
+            text = "🏆 **Best Players (Most Runs)** 🏆\n\n"
+            for i, user in enumerate(sorted_users, 1):
+                if user.get("total_runs", 0) > 0:
+                    text += f"{i}. {user.get('name', 'Unknown')}: {user.get('total_runs', 0)} runs\n"
+            if text == "🏆 **Best Players (Most Runs)** 🏆\n\n":
+                text += "No data available yet!"
+        elif action == "captains":
+            sorted_users = sorted(all_users, key=lambda x: x.get("best_captain", 0), reverse=True)[:10]
+            text = "🧢 **Best Captains Leaderboard** 🧢\n\n"
+            for i, user in enumerate(sorted_users, 1):
+                if user.get("best_captain", 0) > 0:
+                    text += f"{i}. {user.get('name', 'Unknown')}: {user.get('best_captain', 0)} wins\n"
+            if text == "🧢 **Best Captains Leaderboard** 🧢\n\n":
+                text += "No data available yet!"
+        else:
+            text = "Coming soon!"
+        
+        back_button = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Stats", callback_data="back_to_ranks")]])
+        
+        await callback.message.edit_caption(caption=text, reply_markup=back_button, parse_mode=ParseMode.HTML)
+        await callback.answer()
+
+    @app.on_callback_query(filters.regex("^back_to_ranks$"))
+    async def back_to_ranks_callback(client, callback: CallbackQuery):
+        from database import get_or_create_user
+        from pyrogram.enums import ParseMode
+        
+        user = callback.from_user
+        user_id = user.id
+        name = user.first_name
+        username = user.username
+        
+        user_data = await get_or_create_user(user_id, name, username)
+        
+        highest_score = user_data.get("highest_score", 0)
+        highest_score_balls = user_data.get("highest_score_balls", 0)
+        best_game_host = user_data.get("best_game_host", 0)
+        total_runs = user_data.get("total_runs", 0)
+        wickets = user_data.get("wickets", 0)
+        sixes = user_data.get("sixes", 0)
+        fours = user_data.get("fours", 0)
+        centuries = user_data.get("centuries", 0)
+        fifties = user_data.get("fifties", 0)
+        ducks = user_data.get("ducks", 0)
+        hat_tricks = user_data.get("hat_tricks", 0)
+        matches_played = user_data.get("matches_played", 0)
+        
+        if username:
+            clickable_name = f'<a href="tg://user?id={user_id}">@{username}</a>'
+        else:
+            clickable_name = f'<a href="tg://user?id={user_id}">{name}</a>'
+        
+        stats_text = f"""🏏 Stats for {clickable_name}
+📊 Runs: {total_runs} ({matches_played} matches)
+🎯 Wickets: {wickets}
+💥 Sixes: {sixes}
+✨ Fours: {fours}
+🔥 Centuries: {centuries}
+⭐ Fifties: {fifties}
+🦆 Ducks: {ducks}
+🎩 Hat-tricks: {hat_tricks}
+🏏 Highest Score: {highest_score} ({highest_score_balls} balls)
+🧑‍✈️ Best Game Host: {best_game_host}"""
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("1 vs 1", callback_data="rank_1v1"), InlineKeyboardButton("Highest Ducks", callback_data="rank_ducks")],
+            [InlineKeyboardButton("Highest Scores", callback_data="rank_scores"), InlineKeyboardButton("Highest Wickets", callback_data="rank_wickets")],
+            [InlineKeyboardButton("Highest Sixes", callback_data="rank_sixes"), InlineKeyboardButton("Highest Fours", callback_data="rank_fours")],
+            [InlineKeyboardButton("Highest Fifties", callback_data="rank_fifties"), InlineKeyboardButton("Highest Centuries", callback_data="rank_centuries")],
+            [InlineKeyboardButton("Hat-tricks", callback_data="rank_hattricks"), InlineKeyboardButton("Best Game Host", callback_data="rank_host")],
+            [InlineKeyboardButton("Best Players", callback_data="rank_players"), InlineKeyboardButton("Best Captains", callback_data="rank_captains")]
+        ])
+        
+        await callback.message.edit_caption(caption=stats_text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+        await callback.answer()
+
     @app.on_message(filters.command("member_lists") & filters.group)
     async def member_lists_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -807,7 +680,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         except Exception as e:
             await message.reply(f"❌ Error: {e}")
 
-    # ================= STARTGAME COMMAND =================
     @app.on_message(filters.command("startgame") & filters.group)
     async def startgame_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -824,7 +696,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         create_game(chat_id)
         await select_game_menu(client, message)
 
-    # ================= MATCHES COMMAND =================
     @app.on_message(filters.command("matches") & filters.group)
     async def matches_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -858,7 +729,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         
         await message.reply(matches_text)
 
-    # ================= LIVE MATCHES COMMAND =================
     @app.on_message(filters.command("live_matches") & filters.group)
     async def live_matches_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -894,7 +764,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         
         await message.reply(live_text)
 
-    # ================= HOST CHANGE COMMAND =================
     @app.on_message(filters.command("host_change") & filters.group)
     async def host_change_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -941,7 +810,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
             team_game["host_name"] = new_host.first_name
             await message.reply(f"👑 Host changed to [{new_host.first_name}](tg://user?id={new_host.id}) in TEAM mode!")
 
-    # ================= SOLO LEAVE COMMAND =================
     @app.on_message(filters.command("solo_leave") & filters.group)
     async def solo_leave_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -961,7 +829,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         
         await message.reply("❌ You are not in the solo game!")
 
-    # ================= FULL SCORE COMMAND =================
     @app.on_message(filters.command("full_score") & filters.group)
     async def full_score_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -1003,7 +870,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
             
             await message.reply(score_text)
 
-    # ================= REPORT USER COMMAND =================
     @app.on_message(filters.command("report_user") & filters.group)
     async def report_user_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -1047,7 +913,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         
         await message.reply(f"✅ **Report Submitted!**\n\nReported: [{reported_user.first_name}](tg://user?id={reported_user.id})\nReason: {reason}\nTotal Reports: {report_count}")
 
-    # ================= REPORT STATS COMMAND =================
     @app.on_message(filters.command("report_stats") & filters.group)
     async def report_stats_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -1076,7 +941,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         
         await message.reply(stats_text)
 
-    # ================= BATTING COMMAND =================
     @app.on_message(filters.command("batting") & filters.group)
     async def batting_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -1120,7 +984,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         
         await message.reply(f"✅ Batting order updated!\nNew batter at position {args[1]}: {players[position]['name']}")
 
-    # ================= BOWLING COMMAND =================
     @app.on_message(filters.command("bowling") & filters.group)
     async def bowling_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -1164,7 +1027,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         
         await message.reply(f"✅ Bowling order updated!\nNew bowler at position {args[1]}: {players[position]['name']}")
 
-    # ================= CAP CHANGE COMMAND =================
     @app.on_message(filters.command("cap_change") & filters.group)
     async def cap_change_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -1216,7 +1078,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         
         await message.reply(f"✅ Team {team} captain changed to [{new_captain.first_name}](tg://user?id={new_captain.id})!")
 
-    # ================= ADD CAP COMMAND =================
     @app.on_message(filters.command("add_cap") & filters.group)
     async def add_cap_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -1275,7 +1136,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         
         await message.reply(f"✅ {new_captain.first_name} is now Team {team} Captain!")
 
-    # ================= RM CAP COMMAND =================
     @app.on_message(filters.command("rm_cap") & filters.group)
     async def rm_cap_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -1321,7 +1181,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         else:
             await message.reply(f"❌ {rm_captain.first_name} is not a captain!")
 
-    # ================= END MATCH COMMAND =================
     @app.on_message(filters.command("end_match") & filters.group)
     async def end_match_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -1352,7 +1211,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         
         await message.reply("❌ No active game found to end!")
 
-    # ================= END SOLO MATCH CONFIRM =================
     @app.on_callback_query(filters.regex("^end_solo_confirm_"))
     async def end_solo_confirm_callback(client, callback):
         chat_id = int(callback.data.split("_")[3])
@@ -1379,7 +1237,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         
         await callback.answer("✅ Match ended successfully!")
 
-    # ================= END TEAM MATCH CONFIRM =================
     @app.on_callback_query(filters.regex("^end_team_confirm_"))
     async def end_team_confirm_callback(client, callback):
         chat_id = int(callback.data.split("_")[3])
@@ -1407,13 +1264,11 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         
         await callback.answer("✅ Match ended successfully!")
 
-    # ================= END MATCH CANCEL =================
     @app.on_callback_query(filters.regex("^end_cancel$"))
     async def end_cancel_callback(client, callback):
         await callback.message.delete()
         await callback.answer("❌ Match end cancelled!")
 
-    # ================= START DM =================
     @app.on_message(filters.command("start") & filters.private)
     async def start_dm(client, message: Message):
         user_id = message.from_user.id
@@ -1434,7 +1289,317 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         
         await message.reply("🏏 **Welcome to Cricket Game Bot!**\n\nUse me in a group to play cricket games.\nAdd me to a group and use /start there!\n\n**Commands:**\n/start - Start game (Admin) or Vote (Member)\n/joingame - Join a solo game\n/score - Check live score")
 
-    # ================= SELECT GAME MENU =================
+    @app.on_message(filters.private & filters.text)
+    async def bowling_dm(client, message):
+        user_id = message.from_user.id
+        text = message.text.strip()
+        
+        if text.startswith("/start"):
+            return
+        
+        if not text.isdigit() or int(text) not in range(1, 7):
+            return await message.reply(INVALID_NUMBER)
+        
+        num = int(text)
+        
+        for chat_id, game in games.items():
+            if game.get("status") != "playing" or game.get("game_over"):
+                continue
+            if game.get("current_bowler", {}).get("id") != user_id:
+                continue
+            if game.get("bowling_number") is not None:
+                await message.reply("❌ You already bowled! Wait for your next turn.")
+                return
+            
+            if chat_id in bowling_tasks:
+                bowling_tasks[chat_id].cancel()
+                del bowling_tasks[chat_id]
+            
+            set_bowling(chat_id, num)
+            await message.reply(f"✅ Bowling number {num} sent to game!")
+            
+            batter = game["current_batter"]
+            batter_clickable = f"[{batter['name']}](tg://user?id={batter['id']})"
+            await client.send_video(chat_id, BATTING_VIDEO, caption=f"Hey {batter_clickable}, now you're batting! Send number (1-6) in GROUP")
+            return
+        
+        for chat_id, game in team_games.items():
+            if game.get("status") != "playing" or game.get("game_over"):
+                continue
+            if game.get("current_bowler", {}).get("id") != user_id:
+                continue
+            if game.get("bowling_number") is not None:
+                await message.reply("❌ You already bowled! Wait for your next turn.")
+                return
+            
+            if chat_id in bowling_tasks:
+                bowling_tasks[chat_id].cancel()
+                del bowling_tasks[chat_id]
+            
+            game["bowling_number"] = num
+            await message.reply(f"✅ Bowling number {num} sent to game!")
+            
+            batter = game["current_batter"]
+            batter_clickable = f"[{batter['name']}](tg://user?id={batter['id']})"
+            await client.send_message(chat_id, f"🎯 Bowler bowled {num}! Now {batter_clickable}, send your batting number (1-6) in GROUP")
+            return
+        
+        await message.reply("❌ No active game found where you are the bowler!")
+
+    @app.on_message(filters.group & filters.text & ~filters.bot)
+    async def batting_msg(client, message):
+        chat_id = message.chat.id
+        
+        game = games.get(chat_id)
+        if game:
+            if game.get("status") != "playing" or game.get("game_over") or game.get("bowling_number") is None:
+                return
+            
+            batter = game.get("current_batter")
+            if not batter or message.from_user.id != batter.get("id"):
+                return
+            
+            text = message.text.strip()
+            if not text.isdigit() or int(text) not in range(1, 7):
+                return await message.reply(INVALID_NUMBER)
+            
+            try:
+                await message.reply("👍")
+            except:
+                pass
+            
+            bat = int(text)
+            result = play_ball(chat_id, bat)
+            bow = game.get("bowling_number", "?")
+            game["bowling_number"] = None
+            bowler = game["current_bowler"]
+            
+            if result["type"] == "out":
+                try:
+                    await message.reply_video(OUT_VIDEO, caption=OUT_MESSAGE.format(batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
+                except:
+                    await message.reply(OUT_MESSAGE.format(batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
+                
+                if game.get("game_over"):
+                    await message.reply(build_scoreboard(game["players"], is_final=True))
+                    if chat_id in games:
+                        del games[chat_id]
+                    return
+                
+                await message.reply(build_scoreboard(game["players"], is_final=False))
+                
+                new_batter = game["current_batter"]
+                new_bowler = game["current_bowler"]
+                await client.send_message(chat_id, f"🎯 New batter: [{new_batter['name']}](tg://user?id={new_batter['id']})\n🎯 New bowler: [{new_bowler['name']}](tg://user?id={new_bowler['id']})")
+                await send_bowling_video(client, chat_id, game["current_bowler"])
+            else:
+                try:
+                    await message.reply_video(get_run_video(result["runs"]))
+                except:
+                    await message.reply_video(get_run_video(result["runs"]))
+                
+                if not game.get("game_over"):
+                    await send_bowling_video(client, chat_id, bowler)
+            return
+        
+        team_game = team_games.get(chat_id)
+        if not team_game:
+            return
+        
+        if team_game.get("status") != "playing" or team_game.get("game_over") or team_game.get("bowling_number") is None:
+            return
+        
+        batter = team_game.get("current_batter")
+        if not batter or message.from_user.id != batter.get("id"):
+            return
+        
+        text = message.text.strip()
+        if not text.isdigit() or int(text) not in range(1, 7):
+            return await message.reply(INVALID_NUMBER)
+        
+        try:
+            await message.reply("👍")
+        except:
+            pass
+        
+        bat = int(text)
+        bow = team_game.get("bowling_number", "?")
+        team_game["bowling_number"] = None
+        bowler = team_game["current_bowler"]
+        team_key = f"team_{team_game['current_team'].lower()}"
+        
+        if bat == bow:
+            batter["out"] = True
+            team_game["team_wickets"] += 1
+            
+            try:
+                await message.reply_video(OUT_VIDEO, caption=OUT_MESSAGE.format(batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
+            except:
+                await message.reply(OUT_MESSAGE.format(batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
+            
+            active_batters = [p for p in team_game[team_key] if not p.get("out", False)]
+            
+            if not active_batters or team_game["team_wickets"] >= len(team_game[team_key]):
+                team_game["status"] = "innings_break"
+                
+                if team_game["current_team"] == "A":
+                    team_game["team_a_score"] = team_game["team_total"]
+                    team_game["team_a_wickets"] = team_game["team_wickets"]
+                    await client.send_message(chat_id, f"🏏 **Team A Innings Complete!**\n\nTotal: {team_game['team_a_score']}/{team_game['team_a_wickets']}\n\nTeam B needs {team_game['team_a_score'] + 1} runs to win!\n\nStarting Team B innings...")
+                    await start_team_batting(client, chat_id, "B")
+                else:
+                    team_game["team_b_score"] = team_game["team_total"]
+                    team_game["team_b_wickets"] = team_game["team_wickets"]
+                    
+                    if team_game["team_b_score"] > team_game["team_a_score"]:
+                        winner = "Team B"
+                    elif team_game["team_b_score"] < team_game["team_a_score"]:
+                        winner = "Team A"
+                    else:
+                        winner = "Match Tied"
+                    
+                    team_game["game_over"] = True
+                    team_game["winner"] = winner
+                    await client.send_message(chat_id, build_team_scoreboard(team_game))
+                    await client.send_message(chat_id, f"🏆 **Match Over!**\n\nWinner: {winner}\n\nTeam A: {team_game['team_a_score']}/{team_game['team_a_wickets']}\nTeam B: {team_game['team_b_score']}/{team_game['team_b_wickets']}")
+                    
+                    if chat_id in team_games:
+                        del team_games[chat_id]
+                    if chat_id in team_hosts:
+                        del team_hosts[chat_id]
+                return
+            
+            next_batter_index = team_game["current_batter_index"] + 1
+            for i in range(next_batter_index, len(team_game[team_key])):
+                if not team_game[team_key][i].get("out", False):
+                    team_game["current_batter_index"] = i
+                    team_game["current_batter"] = team_game[team_key][i].copy()
+                    await client.send_message(chat_id, f"🎯 New batter: [{team_game['current_batter']['name']}](tg://user?id={team_game['current_batter']['id']})")
+                    break
+            
+            await client.send_message(chat_id, build_team_scoreboard(team_game))
+            team_game["current_bowler_balls"] += 1
+            team_game["total_balls_in_inning"] += 1
+            
+            if team_game["current_bowler_balls"] >= 6:
+                players = team_game[team_key]
+                new_bowler_index = (team_game["current_bowler_index"] + 1) % len(players)
+                team_game["current_bowler_index"] = new_bowler_index
+                team_game["current_bowler"] = players[new_bowler_index].copy()
+                team_game["current_bowler_balls"] = 0
+                await client.send_message(chat_id, f"🔄 New bowler: [{team_game['current_bowler']['name']}](tg://user?id={team_game['current_bowler']['id']})")
+            
+            await send_bowling_video_team(client, chat_id, team_game["current_bowler"])
+        else:
+            runs = bat
+            batter["score"] += runs
+            batter["balls"] += 1
+            if runs == 4:
+                batter["fours"] += 1
+            elif runs == 6:
+                batter["sixes"] += 1
+            batter["history"].append(f"{runs}")
+            team_game["team_total"] += runs
+            team_game["total_balls_in_inning"] += 1
+            
+            try:
+                await message.reply_video(get_run_video(runs))
+            except:
+                await message.reply_video(get_run_video(runs))
+            
+            if team_game["current_team"] == "B" and team_game["team_total"] > team_game["team_a_score"]:
+                team_game["team_b_score"] = team_game["team_total"]
+                team_game["game_over"] = True
+                team_game["winner"] = "Team B"
+                await client.send_message(chat_id, build_team_scoreboard(team_game))
+                await client.send_message(chat_id, f"🏆 **Team B Wins!**\n\nTarget: {team_game['team_a_score'] + 1}\nTeam B: {team_game['team_b_score']}\n\nTeam B wins!")
+                
+                if chat_id in team_games:
+                    del team_games[chat_id]
+                if chat_id in team_hosts:
+                    del team_hosts[chat_id]
+                return
+            
+            await client.send_message(chat_id, build_team_scoreboard(team_game))
+            team_game["current_bowler_balls"] += 1
+            
+            if team_game["current_bowler_balls"] >= 6:
+                players = team_game[team_key]
+                new_bowler_index = (team_game["current_bowler_index"] + 1) % len(players)
+                team_game["current_bowler_index"] = new_bowler_index
+                team_game["current_bowler"] = players[new_bowler_index].copy()
+                team_game["current_bowler_balls"] = 0
+                await client.send_message(chat_id, f"🔄 New bowler: [{team_game['current_bowler']['name']}](tg://user?id={team_game['current_bowler']['id']})")
+            
+            await send_bowling_video_team(client, chat_id, team_game["current_bowler"])
+
+    # ================= VOTE SYSTEM =================
+    async def vote_system(client, message):
+        chat_id = message.chat.id
+        
+        if chat_id in active_votes and active_votes[chat_id].get("active"):
+            await message.reply(f"Voting in progress! Votes: {active_votes[chat_id]['count']}/3")
+            return
+        
+        active_votes[chat_id] = {"active": True, "count": 0, "users": [], "msg_id": None}
+        
+        caption = "🗳️ **VOTING REQUIRED!** 🗳️\n\nYou are not an admin. 3 votes needed.\n\nCurrent votes: 0/3"
+        
+        try:
+            msg = await message.reply_photo(VOTE_IMG, caption=caption, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]]))
+        except:
+            msg = await message.reply(caption, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]]))
+        
+        active_votes[chat_id]["msg_id"] = msg.id
+        asyncio.create_task(auto_cancel_vote(client, chat_id))
+
+    @app.on_callback_query(filters.regex("^vote$"))
+    async def vote_handler(client, callback: CallbackQuery):
+        chat_id = callback.message.chat.id
+        user = callback.from_user
+        
+        vote = active_votes.get(chat_id)
+        if not vote or not vote.get("active"):
+            return await callback.answer("No active voting!", show_alert=True)
+        
+        if user.id in vote["users"]:
+            return await callback.answer("Already voted!", show_alert=True)
+        
+        vote["users"].append(user.id)
+        vote["count"] += 1
+        
+        if vote["count"] >= 3:
+            await callback.message.delete()
+            await select_game_menu(client, callback.message)
+            vote["active"] = False
+            await callback.answer("Voting successful!")
+        else:
+            voters = []
+            for uid in vote["users"]:
+                try:
+                    u = await client.get_users(uid)
+                    voters.append(f"• {u.first_name}")
+                except:
+                    voters.append(f"• User_{uid}")
+            
+            caption = f"🗳️ **VOTING REQUIRED!** 🗳️\n\nYou are not an admin. 3 votes needed.\n\nCurrent votes: {vote['count']}/3\n\n**Voters:**\n{chr(10).join(voters)}"
+            
+            try:
+                await callback.message.edit_caption(caption=caption, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]]))
+            except:
+                await callback.message.edit_text(caption, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]]))
+            await callback.answer(f"Voted! ({vote['count']}/3)")
+
+    async def auto_cancel_vote(client, chat_id):
+        await asyncio.sleep(60)
+        vote = active_votes.get(chat_id)
+        if vote and vote.get("active") and vote["count"] < 3:
+            try:
+                await client.edit_message_caption(chat_id, vote["msg_id"], caption=f"❌ Voting expired! Got {vote['count']}/3 votes.\nUse /start again.")
+            except:
+                pass
+            vote["active"] = False
+
     async def select_game_menu(client, message):
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("👤 Solo", callback_data="mode_solo"), InlineKeyboardButton("👥 Team", callback_data="mode_team")],
@@ -1448,7 +1613,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         except:
             await message.reply(caption, reply_markup=keyboard)
 
-    # ================= MODE HANDLER =================
     @app.on_callback_query(filters.regex("^mode_"))
     async def mode_handler(client, callback: CallbackQuery):
         action = callback.data.split("_")[1]
@@ -1467,7 +1631,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         if action == "solo":
             await ball_selection_menu(client, callback)
 
-    # ================= SOLO MODE =================
     async def ball_selection_menu(client, callback):
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🎯 Solo Play - 1 Ball", callback_data="ball_1")],
@@ -1580,7 +1743,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         await asyncio.sleep(1)
         await send_bowling_video(client, chat_id, bowler)
 
-    # ================= TEAM MODE =================
     async def team_mode_start(client, callback):
         chat_id = callback.message.chat.id
         keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("👑 I'm the Host", callback_data="team_become_host")]])
@@ -1992,7 +2154,6 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
         await client.send_message(chat_id, f"🏏 **Team {team} Batting**\n\nBatter: {batter_clickable}\nBowler: {bowler_clickable}")
         await send_bowling_video_team(client, chat_id, game["current_bowler"])
 
-    # ================= ADD TO TEAM A/B =================
     @app.on_message(filters.command("add_A") & filters.group)
     async def add_to_team_a_cmd(client, message):
         chat_id = message.chat.id
@@ -2177,321 +2338,3 @@ async def back_to_ranks_callback(client, callback: CallbackQuery):
     async def shift_cancel_callback(client, callback):
         await callback.message.delete()
         await callback.answer("❌ Shift cancelled!")
-
-    # ================= BOWLING DM =================
-    @app.on_message(filters.private & filters.text)
-    async def bowling_dm(client, message):
-        user_id = message.from_user.id
-        text = message.text.strip()
-        
-        if text.startswith("/start"):
-            return
-        
-        if not text.isdigit() or int(text) not in range(1, 7):
-            return await message.reply(INVALID_NUMBER)
-        
-        num = int(text)
-        
-        # Solo mode
-        for chat_id, game in games.items():
-            if game.get("status") != "playing" or game.get("game_over"):
-                continue
-            if game.get("current_bowler", {}).get("id") != user_id:
-                continue
-            if game.get("bowling_number") is not None:
-                await message.reply("❌ You already bowled! Wait for your next turn.")
-                return
-            
-            if chat_id in bowling_tasks:
-                bowling_tasks[chat_id].cancel()
-                del bowling_tasks[chat_id]
-            
-            set_bowling(chat_id, num)
-            await message.reply(f"✅ Bowling number {num} sent to game!")
-            
-            batter = game["current_batter"]
-            batter_clickable = f"[{batter['name']}](tg://user?id={batter['id']})"
-            await client.send_video(chat_id, BATTING_VIDEO, caption=f"Hey {batter_clickable}, now you're batting! Send number (1-6) in GROUP")
-            return
-        
-        # Team mode
-        for chat_id, game in team_games.items():
-            if game.get("status") != "playing" or game.get("game_over"):
-                continue
-            if game.get("current_bowler", {}).get("id") != user_id:
-                continue
-            if game.get("bowling_number") is not None:
-                await message.reply("❌ You already bowled! Wait for your next turn.")
-                return
-            
-            if chat_id in bowling_tasks:
-                bowling_tasks[chat_id].cancel()
-                del bowling_tasks[chat_id]
-            
-            game["bowling_number"] = num
-            await message.reply(f"✅ Bowling number {num} sent to game!")
-            
-            batter = game["current_batter"]
-            batter_clickable = f"[{batter['name']}](tg://user?id={batter['id']})"
-            await client.send_message(chat_id, f"🎯 Bowler bowled {num}! Now {batter_clickable}, send your batting number (1-6) in GROUP")
-            return
-        
-        await message.reply("❌ No active game found where you are the bowler!")
-
-    # ================= BATTING =================
-    @app.on_message(filters.group & filters.text & ~filters.bot)
-    async def batting_msg(client, message):
-        chat_id = message.chat.id
-        
-        # Solo mode
-        game = games.get(chat_id)
-        if game:
-            if game.get("status") != "playing" or game.get("game_over") or game.get("bowling_number") is None:
-                return
-            
-            batter = game.get("current_batter")
-            if not batter or message.from_user.id != batter.get("id"):
-                return
-            
-            text = message.text.strip()
-            if not text.isdigit() or int(text) not in range(1, 7):
-                return await message.reply(INVALID_NUMBER)
-            
-            try:
-                await message.reply("👍")
-            except:
-                pass
-            
-            bat = int(text)
-            result = play_ball(chat_id, bat)
-            bow = game.get("bowling_number", "?")
-            game["bowling_number"] = None
-            bowler = game["current_bowler"]
-            
-            if result["type"] == "out":
-                try:
-                    await message.reply_video(OUT_VIDEO, caption=OUT_MESSAGE.format(batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
-                except:
-                    await message.reply(OUT_MESSAGE.format(batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
-                
-                if game.get("game_over"):
-                    await message.reply(build_scoreboard(game["players"], is_final=True))
-                    if chat_id in games:
-                        del games[chat_id]
-                    return
-                
-                await message.reply(build_scoreboard(game["players"], is_final=False))
-                
-                new_batter = game["current_batter"]
-                new_bowler = game["current_bowler"]
-                await client.send_message(chat_id, f"🎯 New batter: [{new_batter['name']}](tg://user?id={new_batter['id']})\n🎯 New bowler: [{new_bowler['name']}](tg://user?id={new_bowler['id']})")
-                await send_bowling_video(client, chat_id, game["current_bowler"])
-            else:
-                try:
-                    await message.reply_video(get_run_video(result["runs"]))
-                except:
-                    await message.reply_video(get_run_video(result["runs"]))
-                
-                if not game.get("game_over"):
-                    await send_bowling_video(client, chat_id, bowler)
-            return
-        
-        # Team mode
-        team_game = team_games.get(chat_id)
-        if not team_game:
-            return
-        
-        if team_game.get("status") != "playing" or team_game.get("game_over") or team_game.get("bowling_number") is None:
-            return
-        
-        batter = team_game.get("current_batter")
-        if not batter or message.from_user.id != batter.get("id"):
-            return
-        
-        text = message.text.strip()
-        if not text.isdigit() or int(text) not in range(1, 7):
-            return await message.reply(INVALID_NUMBER)
-        
-        try:
-            await message.reply("👍")
-        except:
-            pass
-        
-        bat = int(text)
-        bow = team_game.get("bowling_number", "?")
-        team_game["bowling_number"] = None
-        bowler = team_game["current_bowler"]
-        team_key = f"team_{team_game['current_team'].lower()}"
-        
-        if bat == bow:
-            batter["out"] = True
-            team_game["team_wickets"] += 1
-            
-            try:
-                await message.reply_video(OUT_VIDEO, caption=OUT_MESSAGE.format(batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
-            except:
-                await message.reply(OUT_MESSAGE.format(batter=batter["name"], bat=bat, bowler=bowler["name"], bowl=bow))
-            
-            active_batters = [p for p in team_game[team_key] if not p.get("out", False)]
-            
-            if not active_batters or team_game["team_wickets"] >= len(team_game[team_key]):
-                team_game["status"] = "innings_break"
-                
-                if team_game["current_team"] == "A":
-                    team_game["team_a_score"] = team_game["team_total"]
-                    team_game["team_a_wickets"] = team_game["team_wickets"]
-                    await client.send_message(chat_id, f"🏏 **Team A Innings Complete!**\n\nTotal: {team_game['team_a_score']}/{team_game['team_a_wickets']}\n\nTeam B needs {team_game['team_a_score'] + 1} runs to win!\n\nStarting Team B innings...")
-                    await start_team_batting(client, chat_id, "B")
-                else:
-                    team_game["team_b_score"] = team_game["team_total"]
-                    team_game["team_b_wickets"] = team_game["team_wickets"]
-                    
-                    if team_game["team_b_score"] > team_game["team_a_score"]:
-                        winner = "Team B"
-                    elif team_game["team_b_score"] < team_game["team_a_score"]:
-                        winner = "Team A"
-                    else:
-                        winner = "Match Tied"
-                    
-                    team_game["game_over"] = True
-                    team_game["winner"] = winner
-                    await client.send_message(chat_id, build_team_scoreboard(team_game))
-                    await client.send_message(chat_id, f"🏆 **Match Over!**\n\nWinner: {winner}\n\nTeam A: {team_game['team_a_score']}/{team_game['team_a_wickets']}\nTeam B: {team_game['team_b_score']}/{team_game['team_b_wickets']}")
-                    
-                    if chat_id in team_games:
-                        del team_games[chat_id]
-                    if chat_id in team_hosts:
-                        del team_hosts[chat_id]
-                return
-            
-            # Find next batter
-            next_batter_index = team_game["current_batter_index"] + 1
-            for i in range(next_batter_index, len(team_game[team_key])):
-                if not team_game[team_key][i].get("out", False):
-                    team_game["current_batter_index"] = i
-                    team_game["current_batter"] = team_game[team_key][i].copy()
-                    await client.send_message(chat_id, f"🎯 New batter: [{team_game['current_batter']['name']}](tg://user?id={team_game['current_batter']['id']})")
-                    break
-            
-            await client.send_message(chat_id, build_team_scoreboard(team_game))
-            team_game["current_bowler_balls"] += 1
-            team_game["total_balls_in_inning"] += 1
-            
-            if team_game["current_bowler_balls"] >= 6:
-                players = team_game[team_key]
-                new_bowler_index = (team_game["current_bowler_index"] + 1) % len(players)
-                team_game["current_bowler_index"] = new_bowler_index
-                team_game["current_bowler"] = players[new_bowler_index].copy()
-                team_game["current_bowler_balls"] = 0
-                await client.send_message(chat_id, f"🔄 New bowler: [{team_game['current_bowler']['name']}](tg://user?id={team_game['current_bowler']['id']})")
-            
-            await send_bowling_video_team(client, chat_id, team_game["current_bowler"])
-        else:
-            runs = bat
-            batter["score"] += runs
-            batter["balls"] += 1
-            if runs == 4:
-                batter["fours"] += 1
-            elif runs == 6:
-                batter["sixes"] += 1
-            batter["history"].append(f"{runs}")
-            team_game["team_total"] += runs
-            team_game["total_balls_in_inning"] += 1
-            
-            try:
-                await message.reply_video(get_run_video(runs))
-            except:
-                await message.reply_video(get_run_video(runs))
-            
-            if team_game["current_team"] == "B" and team_game["team_total"] > team_game["team_a_score"]:
-                team_game["team_b_score"] = team_game["team_total"]
-                team_game["game_over"] = True
-                team_game["winner"] = "Team B"
-                await client.send_message(chat_id, build_team_scoreboard(team_game))
-                await client.send_message(chat_id, f"🏆 **Team B Wins!**\n\nTarget: {team_game['team_a_score'] + 1}\nTeam B: {team_game['team_b_score']}\n\nTeam B wins!")
-                
-                if chat_id in team_games:
-                    del team_games[chat_id]
-                if chat_id in team_hosts:
-                    del team_hosts[chat_id]
-                return
-            
-            await client.send_message(chat_id, build_team_scoreboard(team_game))
-            team_game["current_bowler_balls"] += 1
-            
-            if team_game["current_bowler_balls"] >= 6:
-                players = team_game[team_key]
-                new_bowler_index = (team_game["current_bowler_index"] + 1) % len(players)
-                team_game["current_bowler_index"] = new_bowler_index
-                team_game["current_bowler"] = players[new_bowler_index].copy()
-                team_game["current_bowler_balls"] = 0
-                await client.send_message(chat_id, f"🔄 New bowler: [{team_game['current_bowler']['name']}](tg://user?id={team_game['current_bowler']['id']})")
-            
-            await send_bowling_video_team(client, chat_id, team_game["current_bowler"])
-
-    # ================= VOTE SYSTEM =================
-    async def vote_system(client, message):
-        chat_id = message.chat.id
-        
-        if chat_id in active_votes and active_votes[chat_id].get("active"):
-            await message.reply(f"Voting in progress! Votes: {active_votes[chat_id]['count']}/3")
-            return
-        
-        active_votes[chat_id] = {"active": True, "count": 0, "users": [], "msg_id": None}
-        
-        caption = "🗳️ **VOTING REQUIRED!** 🗳️\n\nYou are not an admin. 3 votes needed.\n\nCurrent votes: 0/3"
-        
-        try:
-            msg = await message.reply_photo(VOTE_IMG, caption=caption, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]]))
-        except:
-            msg = await message.reply(caption, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]]))
-        
-        active_votes[chat_id]["msg_id"] = msg.id
-        asyncio.create_task(auto_cancel_vote(client, chat_id))
-
-    @app.on_callback_query(filters.regex("^vote$"))
-    async def vote_handler(client, callback: CallbackQuery):
-        chat_id = callback.message.chat.id
-        user = callback.from_user
-        
-        vote = active_votes.get(chat_id)
-        if not vote or not vote.get("active"):
-            return await callback.answer("No active voting!", show_alert=True)
-        
-        if user.id in vote["users"]:
-            return await callback.answer("Already voted!", show_alert=True)
-        
-        vote["users"].append(user.id)
-        vote["count"] += 1
-        
-        if vote["count"] >= 3:
-            await callback.message.delete()
-            await select_game_menu(client, callback.message)
-            vote["active"] = False
-            await callback.answer("Voting successful!")
-        else:
-            voters = []
-            for uid in vote["users"]:
-                try:
-                    u = await client.get_users(uid)
-                    voters.append(f"• {u.first_name}")
-                except:
-                    voters.append(f"• User_{uid}")
-            
-            caption = f"🗳️ **VOTING REQUIRED!** 🗳️\n\nYou are not an admin. 3 votes needed.\n\nCurrent votes: {vote['count']}/3\n\n**Voters:**\n{chr(10).join(voters)}"
-            
-            try:
-                await callback.message.edit_caption(caption=caption, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]]))
-            except:
-                await callback.message.edit_text(caption, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vote to Start", callback_data="vote")]]))
-            await callback.answer(f"Voted! ({vote['count']}/3)")
-
-    async def auto_cancel_vote(client, chat_id):
-        await asyncio.sleep(60)
-        vote = active_votes.get(chat_id)
-        if vote and vote.get("active") and vote["count"] < 3:
-            try:
-                await client.edit_message_caption(chat_id, vote["msg_id"], caption=f"❌ Voting expired! Got {vote['count']}/3 votes.\nUse /start again.")
-            except:
-                pass
-            vote["active"] = False
