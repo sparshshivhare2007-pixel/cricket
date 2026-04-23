@@ -346,10 +346,12 @@ def register_handlers(app):
 🏏 **Enjoy the game!** 🏏"""
         
         await message.reply(help_text)
-      
+          
     # ================= USER INFO COMMAND =================
     @app.on_message(filters.command("user_info") & filters.group)
     async def user_info_cmd(client, message: Message):
+        from pyrogram.enums import ParseMode
+        
         user = message.from_user
         user_id = user.id
         name = user.first_name
@@ -392,8 +394,8 @@ def register_handlers(app):
         else:
             user_mention = f'<a href="tg://user?id={user_id}">{name}</a>'
         
-        # Prepare stats text - Using backticks for monospace (no HTML parse mode)
-        stats_text = f"""`🏏 Stats Summary
+        # Prepare stats text
+        stats_text = f"""🏏 Stats Summary
 👤 User: {user_mention}
 🆔 User ID: {user_id}
 📅 Date: {datetime.now().strftime('%Y-%m-%d')}
@@ -417,7 +419,7 @@ def register_handlers(app):
 
 ─────⊱◈◈◈⊰─────
 🧢 Best captain: {best_captain} (🏆: N/A)
- ╰⊚(🏆: {man_of_match}) + (😞:{ducks})`"""
+ ╰⊚(🏆: {man_of_match}) + (😞:{ducks})"""
         
         # Send image with spoiler and caption
         try:
@@ -427,7 +429,7 @@ def register_handlers(app):
                     USER_STATS_IMAGE,
                     caption=stats_text,
                     has_spoiler=True,
-                    parse_mode="Markdown"
+                    parse_mode=ParseMode.HTML
                 )
             else:
                 await client.send_photo(
@@ -435,12 +437,12 @@ def register_handlers(app):
                     USER_STATS_IMAGE,
                     caption=stats_text,
                     has_spoiler=True,
-                    parse_mode="Markdown"
+                    parse_mode=ParseMode.HTML
                 )
         except Exception as e:
             print(f"Error sending image: {e}")
-            # Fallback - send without image
-            await message.reply(stats_text, parse_mode="Markdown")
+            # Fallback - send without image and without HTML
+            await message.reply(stats_text.replace(user_mention, f"@{username}" if username else name))
             
     # ================= USER RANKS COMMAND =================
     @app.on_message(filters.command("user_ranks") & filters.group)
