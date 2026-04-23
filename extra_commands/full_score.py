@@ -1,7 +1,6 @@
 from pyrogram import filters
 from pyrogram.types import Message
 from solo.game import games, build_scoreboard
-from team.handlers import team_games, build_team_scoreboard
 
 def register_full_score(app):
     

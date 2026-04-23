@@ -1,6 +1,5 @@
 from pyrogram import filters
 from pyrogram.types import Message
-from team.handlers import team_games, team_hosts
 
 def register_add_cap(app):
     

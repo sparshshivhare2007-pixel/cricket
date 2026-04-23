@@ -1,7 +1,6 @@
 from pyrogram import filters
 from pyrogram.types import Message
 from solo.game import games
-from team.handlers import team_games, team_hosts
 
 def register_host_change(app):
     
