@@ -16,12 +16,11 @@ bowling_tasks = {}
 # ================= TEAM MODE VARIABLES =================
 team_games = {}
 team_hosts = {}
-
+user_reports = {}
 
 def get_run_video(runs):
     run_videos = {1: RUN_1_VIDEO, 2: RUN_2_VIDEO, 3: RUN_3_VIDEO, 4: RUN_4_VIDEO, 5: RUN_5_VIDEO, 6: RUN_6_VIDEO}
     return run_videos.get(runs, RUN_1_VIDEO)
-
 
 async def is_admin(client, chat_id, user_id):
     try:
@@ -29,7 +28,6 @@ async def is_admin(client, chat_id, user_id):
         return member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]
     except:
         return False
-
 
 # ================= SOLO MODE SEND BOWLING VIDEO =================
 async def send_bowling_video(client, chat_id, bowler):
@@ -73,7 +71,6 @@ async def send_bowling_video(client, chat_id, bowler):
     
     task = asyncio.create_task(bowling_timeout_with_warnings(client, chat_id, bowler["id"], bowler["name"], None))
     bowling_tasks[chat_id] = task
-
 
 # ================= SOLO MODE TIMEOUT =================
 async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, message_id):
@@ -139,7 +136,6 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
     if chat_id in bowling_tasks:
         del bowling_tasks[chat_id]
 
-
 # ================= TEAM MODE SEND BOWLING VIDEO =================
 async def send_bowling_video_team(client, chat_id, bowler):
     game = team_games.get(chat_id)
@@ -182,7 +178,6 @@ async def send_bowling_video_team(client, chat_id, bowler):
     
     task = asyncio.create_task(bowling_timeout_with_warnings_team(client, chat_id, bowler["id"], bowler["name"], None))
     bowling_tasks[chat_id] = task
-
 
 # ================= TEAM MODE TIMEOUT =================
 async def bowling_timeout_with_warnings_team(client, chat_id, user_id, bowler_name, message_id):
@@ -258,7 +253,6 @@ async def bowling_timeout_with_warnings_team(client, chat_id, user_id, bowler_na
     if chat_id in bowling_tasks:
         del bowling_tasks[chat_id]
 
-
 def build_team_scoreboard(game):
     team_key = f"team_{game['current_team'].lower()}"
     players = game[team_key]
@@ -276,7 +270,6 @@ def build_team_scoreboard(game):
         scoreboard += "\n"
     
     return scoreboard
-
 
 def register_handlers(app):
 
@@ -354,47 +347,47 @@ def register_handlers(app):
         
         await message.reply(help_text)
 
-     # ================= USER INFO COMMAND =================
-@app.on_message(filters.command("user_info") & filters.group)
-async def user_info_cmd(client, message: Message):
-    user = message.from_user
-    user_id = user.id
-    name = user.first_name
-    username = user.username
-    
-    # Get or create user from database
-    from database import get_or_create_user
-    
-    # Ensure user exists in database
-    user_data = await get_or_create_user(user_id, name, username)
-    
-    # Get stats from database
-    highest_score = user_data.get("highest_score", 0)
-    highest_score_balls = user_data.get("highest_score_balls", 0)
-    best_game_host = user_data.get("best_game_host", 0)
-    total_runs = user_data.get("total_runs", 0)
-    total_balls = user_data.get("total_balls", 0)
-    wickets = user_data.get("wickets", 0)
-    sixes = user_data.get("sixes", 0)
-    fours = user_data.get("fours", 0)
-    centuries = user_data.get("centuries", 0)
-    fifties = user_data.get("fifties", 0)
-    ducks = user_data.get("ducks", 0)
-    hat_tricks = user_data.get("hat_tricks", 0)
-    man_of_match = user_data.get("man_of_match", 0)
-    best_captain = user_data.get("best_captain", 0)
-    matches_played = user_data.get("matches_played", 0)
-    runs_conceded = user_data.get("runs_conceded", 0)
-    overs_bowled = user_data.get("overs_bowled", 0)
-    
-    # Calculate strike rate
-    strike_rate = round((total_runs / total_balls) * 100, 2) if total_balls > 0 else 0.0
-    
-    # Calculate economy rate
-    economy_rate = round((runs_conceded / overs_bowled), 2) if overs_bowled > 0 else 0.0
-    
-    # Prepare stats text
-    stats_text = f"""🏏 **Stats Summary**
+    # ================= USER INFO COMMAND =================
+    @app.on_message(filters.command("user_info") & filters.group)
+    async def user_info_cmd(client, message: Message):
+        user = message.from_user
+        user_id = user.id
+        name = user.first_name
+        username = user.username
+        
+        # Get or create user from database
+        from database import get_or_create_user
+        
+        # Ensure user exists in database
+        user_data = await get_or_create_user(user_id, name, username)
+        
+        # Get stats from database
+        highest_score = user_data.get("highest_score", 0)
+        highest_score_balls = user_data.get("highest_score_balls", 0)
+        best_game_host = user_data.get("best_game_host", 0)
+        total_runs = user_data.get("total_runs", 0)
+        total_balls = user_data.get("total_balls", 0)
+        wickets = user_data.get("wickets", 0)
+        sixes = user_data.get("sixes", 0)
+        fours = user_data.get("fours", 0)
+        centuries = user_data.get("centuries", 0)
+        fifties = user_data.get("fifties", 0)
+        ducks = user_data.get("ducks", 0)
+        hat_tricks = user_data.get("hat_tricks", 0)
+        man_of_match = user_data.get("man_of_match", 0)
+        best_captain = user_data.get("best_captain", 0)
+        matches_played = user_data.get("matches_played", 0)
+        runs_conceded = user_data.get("runs_conceded", 0)
+        overs_bowled = user_data.get("overs_bowled", 0)
+        
+        # Calculate strike rate
+        strike_rate = round((total_runs / total_balls) * 100, 2) if total_balls > 0 else 0.0
+        
+        # Calculate economy rate
+        economy_rate = round((runs_conceded / overs_bowled), 2) if overs_bowled > 0 else 0.0
+        
+        # Prepare stats text
+        stats_text = f"""🏏 **Stats Summary**
 👤 User: {name}
 🆔 User ID: {user_id}
 📅 Date: {datetime.now().strftime('%Y-%m-%d')}
@@ -419,31 +412,27 @@ async def user_info_cmd(client, message: Message):
 ─────⊱◈◈◈⊰─────
 🧢 Best captain: {best_captain} (🏆: N/A)
  ╰⊚(🏆: {man_of_match}) + (😞:{ducks})"""
-    
-    # Send image with spoiler and caption
-    try:
-        # Check if USER_STATS_IMAGE is a file_id or URL
-        if USER_STATS_IMAGE.startswith(('http://', 'https://')):
-            # It's a URL
-            await client.send_photo(
-                message.chat.id,
-                USER_STATS_IMAGE,
-                caption=stats_text,
-                has_spoiler=True
-            )
-        else:
-            # It's a file_id from Telegram
-            await client.send_photo(
-                message.chat.id,
-                USER_STATS_IMAGE,
-                caption=stats_text,
-                has_spoiler=True
-            )
-    except Exception as e:
-        print(f"Error sending image: {e}")
-        # Fallback - send without image
-        await message.reply(stats_text)
         
+        # Send image with spoiler and caption
+        try:
+            if USER_STATS_IMAGE.startswith(('http://', 'https://')):
+                await client.send_photo(
+                    message.chat.id,
+                    USER_STATS_IMAGE,
+                    caption=stats_text,
+                    has_spoiler=True
+                )
+            else:
+                await client.send_photo(
+                    message.chat.id,
+                    USER_STATS_IMAGE,
+                    caption=stats_text,
+                    has_spoiler=True
+                )
+        except Exception as e:
+            print(f"Error sending image: {e}")
+            await message.reply(stats_text)
+
     # ================= USER RANKS COMMAND =================
     @app.on_message(filters.command("user_ranks") & filters.group)
     async def user_ranks_cmd(client, message: Message):
@@ -715,8 +704,6 @@ async def user_info_cmd(client, message: Message):
             await message.reply(score_text)
 
     # ================= REPORT USER COMMAND =================
-    user_reports = {}
-    
     @app.on_message(filters.command("report_user") & filters.group)
     async def report_user_cmd(client, message: Message):
         chat_id = message.chat.id
