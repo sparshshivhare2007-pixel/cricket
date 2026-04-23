@@ -443,81 +443,332 @@ def register_handlers(app):
             print(f"Error sending image: {e}")
             # Fallback - send without image and without HTML
             await message.reply(stats_text.replace(user_mention, f"@{username}" if username else name))
-            
     # ================= USER RANKS COMMAND =================
-    @app.on_message(filters.command("user_ranks") & filters.group)
-    async def user_ranks_cmd(client, message: Message):
-        chat_id = message.chat.id
-        solo_game = games.get(chat_id)
-        team_game = team_games.get(chat_id)
-        
-        if not solo_game and not team_game:
-            await message.reply("❌ No active game found!")
-            return
-        
-        rank_text = "🏆 **Player Ranks** 🏆\n\n"
-        
-        if solo_game and solo_game.get("players"):
-            players = solo_game["players"]
-            sorted_players = sorted(players, key=lambda x: x.get("score", 0), reverse=True)
-            
-            for i, p in enumerate(sorted_players, 1):
-                name = f"@{p['username']}" if p.get('username') else p['name']
-                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📌"
-                rank_text += f"{medal} {i}. {name} - {p.get('score', 0)} runs\n"
-        
-        if team_game:
-            rank_text += "\n**TEAM A:**\n"
-            team_a_players = sorted(team_game.get("team_a", []), key=lambda x: x.get("score", 0), reverse=True)
-            for i, p in enumerate(team_a_players, 1):
-                name = f"@{p['username']}" if p.get('username') else p['name']
-                rank_text += f"   {i}. {name} - {p.get('score', 0)} runs\n"
-            
-            rank_text += "\n**TEAM B:**\n"
-            team_b_players = sorted(team_game.get("team_b", []), key=lambda x: x.get("score", 0), reverse=True)
-            for i, p in enumerate(team_b_players, 1):
-                name = f"@{p['username']}" if p.get('username') else p['name']
-                rank_text += f"   {i}. {name} - {p.get('score', 0)} runs\n"
-        
-        await message.reply(rank_text)
-        
-    # ================= USER RANKS COMMAND =================
-    @app.on_message(filters.command("user_ranks") & filters.group)
-    async def user_ranks_cmd(client, message: Message):
-        chat_id = message.chat.id
-        solo_game = games.get(chat_id)
-        team_game = team_games.get(chat_id)
-        
-        if not solo_game and not team_game:
-            await message.reply("❌ No active game found!")
-            return
-        
-        rank_text = "🏆 **Player Ranks** 🏆\n\n"
-        
-        if solo_game and solo_game.get("players"):
-            players = solo_game["players"]
-            sorted_players = sorted(players, key=lambda x: x.get("score", 0), reverse=True)
-            
-            for i, p in enumerate(sorted_players, 1):
-                name = f"@{p['username']}" if p.get('username') else p['name']
-                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📌"
-                rank_text += f"{medal} {i}. {name} - {p.get('score', 0)} runs\n"
-        
-        if team_game:
-            rank_text += "\n**TEAM A:**\n"
-            team_a_players = sorted(team_game.get("team_a", []), key=lambda x: x.get("score", 0), reverse=True)
-            for i, p in enumerate(team_a_players, 1):
-                name = f"@{p['username']}" if p.get('username') else p['name']
-                rank_text += f"   {i}. {name} - {p.get('score', 0)} runs\n"
-            
-            rank_text += "\n**TEAM B:**\n"
-            team_b_players = sorted(team_game.get("team_b", []), key=lambda x: x.get("score", 0), reverse=True)
-            for i, p in enumerate(team_b_players, 1):
-                name = f"@{p['username']}" if p.get('username') else p['name']
-                rank_text += f"   {i}. {name} - {p.get('score', 0)} runs\n"
-        
-        await message.reply(rank_text)
+@app.on_message(filters.command("user_ranks") & filters.group)
+async def user_ranks_cmd(client, message: Message):
+    from pyrogram.enums import ParseMode
+    from database import get_or_create_user
+    
+    user = message.from_user
+    user_id = user.id
+    name = user.first_name
+    username = user.username
+    
+    # Get user data from database
+    user_data = await get_or_create_user(user_id, name, username)
+    
+    # Get stats
+    highest_score = user_data.get("highest_score", 0)
+    highest_score_balls = user_data.get("highest_score_balls", 0)
+    best_game_host = user_data.get("best_game_host", 0)
+    total_runs = user_data.get("total_runs", 0)
+    total_balls = user_data.get("total_balls", 0)
+    wickets = user_data.get("wickets", 0)
+    sixes = user_data.get("sixes", 0)
+    fours = user_data.get("fours", 0)
+    centuries = user_data.get("centuries", 0)
+    fifties = user_data.get("fifties", 0)
+    ducks = user_data.get("ducks", 0)
+    hat_tricks = user_data.get("hat_tricks", 0)
+    man_of_match = user_data.get("man_of_match", 0)
+    best_captain = user_data.get("best_captain", 0)
+    matches_played = user_data.get("matches_played", 0)
+    
+    # Create clickable name
+    if username:
+        clickable_name = f'<a href="tg://user?id={user_id}">@{username}</a>'
+    else:
+        clickable_name = f'<a href="tg://user?id={user_id}">{name}</a>'
+    
+    # Prepare stats text
+    stats_text = f"""🏏 Stats for {clickable_name}
+📊 Runs: {total_runs} ({matches_played} matches)
+🎯 Wickets: {wickets}
+💥 Sixes: {sixes}
+✨ Fours: {fours}
+🔥 Centuries: {centuries}
+⭐ Fifties: {fifties}
+🦆 Ducks: {ducks}
+🎩 Hat-tricks: {hat_tricks}
+🏏 Highest Score: {highest_score} ({highest_score_balls} balls)
+🧑‍✈️ Best Game Host: {best_game_host}"""
+    
+    # Create 12 inline buttons
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("1 vs 1", callback_data="rank_1v1"),
+            InlineKeyboardButton("Highest Ducks", callback_data="rank_ducks")
+        ],
+        [
+            InlineKeyboardButton("Highest Scores", callback_data="rank_scores"),
+            InlineKeyboardButton("Highest Wickets", callback_data="rank_wickets")
+        ],
+        [
+            InlineKeyboardButton("Highest Sixes", callback_data="rank_sixes"),
+            InlineKeyboardButton("Highest Fours", callback_data="rank_fours")
+        ],
+        [
+            InlineKeyboardButton("Highest Fifties", callback_data="rank_fifties"),
+            InlineKeyboardButton("Highest Centuries", callback_data="rank_centuries")
+        ],
+        [
+            InlineKeyboardButton("Hat-tricks", callback_data="rank_hattricks"),
+            InlineKeyboardButton("Best Game Host", callback_data="rank_host")
+        ],
+        [
+            InlineKeyboardButton("Best Players", callback_data="rank_players"),
+            InlineKeyboardButton("Best Captains", callback_data="rank_captains")
+        ]
+    ])
+    
+    # Send image with stats and buttons
+    try:
+        await client.send_photo(
+            message.chat.id,
+            USER_RANKS_IMAGE,  # From config.py
+            caption=stats_text,
+            reply_markup=keyboard,
+            parse_mode=ParseMode.HTML
+        )
+    except Exception as e:
+        print(f"Error sending user ranks: {e}")
+        # Fallback - send without image
+        await message.reply(stats_text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
+# ================= RANK BUTTON HANDLERS =================
+@app.on_callback_query(filters.regex("^rank_"))
+async def rank_buttons_handler(client, callback: CallbackQuery):
+    from database import get_all_users_stats
+    
+    action = callback.data.split("_")[1]
+    chat_id = callback.message.chat.id
+    
+    # Get all users stats from database
+    all_users = await get_all_users_stats()
+    
+    if action == "1v1":
+        text = "🏆 **1 vs 1 Leaderboard**\n\nComing soon!"
+        
+    elif action == "ducks":
+        # Sort by ducks (most ducks first)
+        sorted_users = sorted(all_users, key=lambda x: x.get("ducks", 0), reverse=True)[:10]
+        text = "🦆 **Highest Ducks Leaderboard** 🦆\n\n"
+        for i, user in enumerate(sorted_users, 1):
+            if user.get("ducks", 0) > 0:
+                name = user.get("name", "Unknown")
+                text += f"{i}. {name}: {user.get('ducks', 0)} ducks\n"
+        if len(sorted_users) == 0 or all(u.get("ducks", 0) == 0 for u in sorted_users):
+            text += "No data available yet!"
+            
+    elif action == "scores":
+        # Sort by highest score
+        sorted_users = sorted(all_users, key=lambda x: x.get("highest_score", 0), reverse=True)[:10]
+        text = "🏏 **Highest Scores Leaderboard** 🏏\n\n"
+        for i, user in enumerate(sorted_users, 1):
+            if user.get("highest_score", 0) > 0:
+                name = user.get("name", "Unknown")
+                score = user.get("highest_score", 0)
+                balls = user.get("highest_score_balls", 0)
+                text += f"{i}. {name}: {score} ({balls} balls)\n"
+        if len(sorted_users) == 0 or all(u.get("highest_score", 0) == 0 for u in sorted_users):
+            text += "No data available yet!"
+            
+    elif action == "wickets":
+        # Sort by wickets
+        sorted_users = sorted(all_users, key=lambda x: x.get("wickets", 0), reverse=True)[:10]
+        text = "🎯 **Highest Wickets Leaderboard** 🎯\n\n"
+        for i, user in enumerate(sorted_users, 1):
+            if user.get("wickets", 0) > 0:
+                name = user.get("name", "Unknown")
+                text += f"{i}. {name}: {user.get('wickets', 0)} wickets\n"
+        if len(sorted_users) == 0 or all(u.get("wickets", 0) == 0 for u in sorted_users):
+            text += "No data available yet!"
+            
+    elif action == "sixes":
+        # Sort by sixes
+        sorted_users = sorted(all_users, key=lambda x: x.get("sixes", 0), reverse=True)[:10]
+        text = "💥 **Highest Sixes Leaderboard** 💥\n\n"
+        for i, user in enumerate(sorted_users, 1):
+            if user.get("sixes", 0) > 0:
+                name = user.get("name", "Unknown")
+                text += f"{i}. {name}: {user.get('sixes', 0)} sixes\n"
+        if len(sorted_users) == 0 or all(u.get("sixes", 0) == 0 for u in sorted_users):
+            text += "No data available yet!"
+            
+    elif action == "fours":
+        # Sort by fours
+        sorted_users = sorted(all_users, key=lambda x: x.get("fours", 0), reverse=True)[:10]
+        text = "✨ **Highest Fours Leaderboard** ✨\n\n"
+        for i, user in enumerate(sorted_users, 1):
+            if user.get("fours", 0) > 0:
+                name = user.get("name", "Unknown")
+                text += f"{i}. {name}: {user.get('fours', 0)} fours\n"
+        if len(sorted_users) == 0 or all(u.get("fours", 0) == 0 for u in sorted_users):
+            text += "No data available yet!"
+            
+    elif action == "fifties":
+        # Sort by fifties
+        sorted_users = sorted(all_users, key=lambda x: x.get("fifties", 0), reverse=True)[:10]
+        text = "⭐ **Highest Fifties Leaderboard** ⭐\n\n"
+        for i, user in enumerate(sorted_users, 1):
+            if user.get("fifties", 0) > 0:
+                name = user.get("name", "Unknown")
+                text += f"{i}. {name}: {user.get('fifties', 0)} fifties\n"
+        if len(sorted_users) == 0 or all(u.get("fifties", 0) == 0 for u in sorted_users):
+            text += "No data available yet!"
+            
+    elif action == "centuries":
+        # Sort by centuries
+        sorted_users = sorted(all_users, key=lambda x: x.get("centuries", 0), reverse=True)[:10]
+        text = "🔥 **Highest Centuries Leaderboard** 🔥\n\n"
+        for i, user in enumerate(sorted_users, 1):
+            if user.get("centuries", 0) > 0:
+                name = user.get("name", "Unknown")
+                text += f"{i}. {name}: {user.get('centuries', 0)} centuries\n"
+        if len(sorted_users) == 0 or all(u.get("centuries", 0) == 0 for u in sorted_users):
+            text += "No data available yet!"
+            
+    elif action == "hattricks":
+        # Sort by hat-tricks
+        sorted_users = sorted(all_users, key=lambda x: x.get("hat_tricks", 0), reverse=True)[:10]
+        text = "🎩 **Hat-tricks Leaderboard** 🎩\n\n"
+        for i, user in enumerate(sorted_users, 1):
+            if user.get("hat_tricks", 0) > 0:
+                name = user.get("name", "Unknown")
+                text += f"{i}. {name}: {user.get('hat_tricks', 0)} hat-tricks\n"
+        if len(sorted_users) == 0 or all(u.get("hat_tricks", 0) == 0 for u in sorted_users):
+            text += "No data available yet!"
+            
+    elif action == "host":
+        # Sort by best game host
+        sorted_users = sorted(all_users, key=lambda x: x.get("best_game_host", 0), reverse=True)[:10]
+        text = "🎮 **Best Game Host Leaderboard** 🎮\n\n"
+        for i, user in enumerate(sorted_users, 1):
+            if user.get("best_game_host", 0) > 0:
+                name = user.get("name", "Unknown")
+                text += f"{i}. {name}: {user.get('best_game_host', 0)} times\n"
+        if len(sorted_users) == 0 or all(u.get("best_game_host", 0) == 0 for u in sorted_users):
+            text += "No data available yet!"
+            
+    elif action == "players":
+        # Sort by total runs
+        sorted_users = sorted(all_users, key=lambda x: x.get("total_runs", 0), reverse=True)[:10]
+        text = "🏆 **Best Players (Most Runs)** 🏆\n\n"
+        for i, user in enumerate(sorted_users, 1):
+            if user.get("total_runs", 0) > 0:
+                name = user.get("name", "Unknown")
+                text += f"{i}. {name}: {user.get('total_runs', 0)} runs\n"
+        if len(sorted_users) == 0 or all(u.get("total_runs", 0) == 0 for u in sorted_users):
+            text += "No data available yet!"
+            
+    elif action == "captains":
+        # Sort by best captain
+        sorted_users = sorted(all_users, key=lambda x: x.get("best_captain", 0), reverse=True)[:10]
+        text = "🧢 **Best Captains Leaderboard** 🧢\n\n"
+        for i, user in enumerate(sorted_users, 1):
+            if user.get("best_captain", 0) > 0:
+                name = user.get("name", "Unknown")
+                text += f"{i}. {name}: {user.get('best_captain', 0)} wins\n"
+        if len(sorted_users) == 0 or all(u.get("best_captain", 0) == 0 for u in sorted_users):
+            text += "No data available yet!"
+    
+    else:
+        text = "Coming soon!"
+    
+    # Create back button
+    back_button = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Back to Stats", callback_data="back_to_ranks")]
+    ])
+    
+    await callback.message.edit_caption(
+        caption=text,
+        reply_markup=back_button,
+        parse_mode=ParseMode.HTML
+    )
+    await callback.answer()
+
+
+# ================= BACK TO RANKS BUTTON =================
+@app.on_callback_query(filters.regex("^back_to_ranks$"))
+async def back_to_ranks_callback(client, callback: CallbackQuery):
+    from database import get_or_create_user
+    
+    user = callback.from_user
+    user_id = user.id
+    name = user.first_name
+    username = user.username
+    
+    # Get user data
+    user_data = await get_or_create_user(user_id, name, username)
+    
+    # Get stats
+    highest_score = user_data.get("highest_score", 0)
+    highest_score_balls = user_data.get("highest_score_balls", 0)
+    best_game_host = user_data.get("best_game_host", 0)
+    total_runs = user_data.get("total_runs", 0)
+    matches_played = user_data.get("matches_played", 0)
+    wickets = user_data.get("wickets", 0)
+    sixes = user_data.get("sixes", 0)
+    fours = user_data.get("fours", 0)
+    centuries = user_data.get("centuries", 0)
+    fifties = user_data.get("fifties", 0)
+    ducks = user_data.get("ducks", 0)
+    hat_tricks = user_data.get("hat_tricks", 0)
+    
+    # Create clickable name
+    if username:
+        clickable_name = f'<a href="tg://user?id={user_id}">@{username}</a>'
+    else:
+        clickable_name = f'<a href="tg://user?id={user_id}">{name}</a>'
+    
+    # Prepare stats text
+    stats_text = f"""🏏 Stats for {clickable_name}
+📊 Runs: {total_runs} ({matches_played} matches)
+🎯 Wickets: {wickets}
+💥 Sixes: {sixes}
+✨ Fours: {fours}
+🔥 Centuries: {centuries}
+⭐ Fifties: {fifties}
+🦆 Ducks: {ducks}
+🎩 Hat-tricks: {hat_tricks}
+🏏 Highest Score: {highest_score} ({highest_score_balls} balls)
+🧑‍✈️ Best Game Host: {best_game_host}"""
+    
+    # Create buttons
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("1 vs 1", callback_data="rank_1v1"),
+            InlineKeyboardButton("Highest Ducks", callback_data="rank_ducks")
+        ],
+        [
+            InlineKeyboardButton("Highest Scores", callback_data="rank_scores"),
+            InlineKeyboardButton("Highest Wickets", callback_data="rank_wickets")
+        ],
+        [
+            InlineKeyboardButton("Highest Sixes", callback_data="rank_sixes"),
+            InlineKeyboardButton("Highest Fours", callback_data="rank_fours")
+        ],
+        [
+            InlineKeyboardButton("Highest Fifties", callback_data="rank_fifties"),
+            InlineKeyboardButton("Highest Centuries", callback_data="rank_centuries")
+        ],
+        [
+            InlineKeyboardButton("Hat-tricks", callback_data="rank_hattricks"),
+            InlineKeyboardButton("Best Game Host", callback_data="rank_host")
+        ],
+        [
+            InlineKeyboardButton("Best Players", callback_data="rank_players"),
+            InlineKeyboardButton("Best Captains", callback_data="rank_captains")
+        ]
+    ])
+    
+    await callback.message.edit_caption(
+        caption=stats_text,
+        reply_markup=keyboard,
+        parse_mode=ParseMode.HTML
+    )
+    await callback.answer()
+    
     # ================= MEMBER LISTS COMMAND =================
     @app.on_message(filters.command("member_lists") & filters.group)
     async def member_lists_cmd(client, message: Message):
