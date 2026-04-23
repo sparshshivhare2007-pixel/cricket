@@ -355,19 +355,19 @@ def register_handlers(app):
         
         await message.reply(help_text)
 
-    # ================= USER INFO COMMAND =================
-    @app.on_message(filters.command("user_info") & filters.group)
-    async def user_info_cmd(client, message: Message):
-        user = message.from_user
-        text = f"""👤 **User Information**
+  # ================= USER INFO COMMAND =================
+@app.on_message(filters.command("user_info") & filters.group)
+async def user_info_cmd(client, message: Message):
+    user = message.from_user
+    text = f"""👤 **User Information**
 
 🆔 **User ID:** `{user.id}`
 📛 **First Name:** {user.first_name}
 🏷️ **Last Name:** {user.last_name if user.last_name else 'N/A'}
 📝 **Username:** @{user.username if user.username else 'N/A'}
-📅 **Date:** {datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')}"""
-        
-        await message.reply(text)
+📅 **Date:** {message.date.strftime('%Y-%m-%d %H:%M:%S')}"""
+    
+    await message.reply(text)
 
     # ================= USER RANKS COMMAND =================
     @app.on_message(filters.command("user_ranks") & filters.group)
