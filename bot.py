@@ -1,9 +1,8 @@
-# bot.py - Final Version
+# bot.py - Final Version (Solo + Extra Commands)
 
 from pyrogram import Client
 from config import BOT_TOKEN, API_ID, API_HASH
 from solo.handlers import register_handlers as register_solo_handlers
-from team.handlers import register_handlers as register_team_handlers
 from extra_commands import register_extra_commands
 
 print("🚀 Starting Cricket Game Bot...")
@@ -19,9 +18,6 @@ app = Client(
 
 print("📝 Registering Solo Mode Handlers...")
 register_solo_handlers(app)
-
-print("📝 Registering Team Mode Handlers...")
-register_team_handlers(app)
 
 print("📝 Registering Extra Commands...")
 register_extra_commands(app)
