@@ -176,6 +176,20 @@ async def update_match_stats(user_id, runs_scored=0, balls_played=0, wickets_tak
     await update_user_highest_score(user_id, runs_scored, balls_played)
 
 
+# ================= GET ALL USERS STATS (FOR LEADERBOARDS) =================
+
+async def get_all_users_stats():
+    """Get all users statistics from database for leaderboards"""
+    if users is None:
+        return []
+    users_list = []
+    async for doc in users.find({}):
+        # Create a copy without _id for easier handling
+        user_data = {k: v for k, v in doc.items() if k != '_id'}
+        users_list.append(user_data)
+    return users_list
+
+
 # ================= SOLO GAME FUNCTIONS =================
 
 async def save_solo_game(chat_id, game_data):
