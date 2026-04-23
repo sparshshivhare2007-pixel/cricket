@@ -347,100 +347,151 @@ def register_handlers(app):
         
         await message.reply(help_text)
 
-    # ================= USER INFO COMMAND =================
+    # ================= USER INFO COMMAND ================
     @app.on_message(filters.command("user_info") & filters.group)
     async def user_info_cmd(client, message: Message):
-    user = message.from_user
-    user_id = user.id
-    name = user.first_name
-    username = user.username
-    
-    # Get or create user from database
-    from database import get_or_create_user
-    
-    # Ensure user exists in database
-    user_data = await get_or_create_user(user_id, name, username)
-    
-    # Get stats from database
-    highest_score = user_data.get("highest_score", 0)
-    highest_score_balls = user_data.get("highest_score_balls", 0)
-    best_game_host = user_data.get("best_game_host", 0)
-    total_runs = user_data.get("total_runs", 0)
-    total_balls = user_data.get("total_balls", 0)
-    wickets = user_data.get("wickets", 0)
-    sixes = user_data.get("sixes", 0)
-    fours = user_data.get("fours", 0)
-    centuries = user_data.get("centuries", 0)
-    fifties = user_data.get("fifties", 0)
-    ducks = user_data.get("ducks", 0)
-    hat_tricks = user_data.get("hat_tricks", 0)
-    man_of_match = user_data.get("man_of_match", 0)
-    best_captain = user_data.get("best_captain", 0)
-    matches_played = user_data.get("matches_played", 0)
-    runs_conceded = user_data.get("runs_conceded", 0)
-    overs_bowled = user_data.get("overs_bowled", 0)
-    
-    # Calculate strike rate
-    strike_rate = round((total_runs / total_balls) * 100, 2) if total_balls > 0 else 0.0
-    
-    # Calculate economy rate
-    economy_rate = round((runs_conceded / overs_bowled), 2) if overs_bowled > 0 else 0.0
-    
-    # Create clickable user mention
-    if username:
-        user_mention = f"<a href='tg://user?id={user_id}'>@{username}</a>"
-    else:
-        user_mention = f"<a href='tg://user?id={user_id}'>{name}</a>"
-    
-    # Prepare stats text with monospace font and better formatting
-    stats_text = f"""<code>🏏 Stats Summary
-👤 User: {user_mention}
-🆔 User ID: {user_id}
-📅 Date: {datetime.now().strftime('%Y-%m-%d')}
-─────⊱◈◈◈⊰─────
-🏆 Highest Score: {highest_score}({highest_score_balls} Balls)
-🎮 Best Game Host: {best_game_host}
-📊 Runs: {total_runs} ({matches_played})
-🎯 Wickets: {wickets}
-💥 Sixes: {sixes}
-✨ Fours: {fours}
-🔥 Centuries: {centuries}
-⭐ Fifties: {fifties}
-🦆 Ducks: {ducks}
-🎩 Hat-Tricks: {hat_tricks}
-⚡ Strike Rate: {strike_rate}
-🎯 Economy Rate: {economy_rate}
-─────⊱◈◈◈⊰─────
-🏅 Man of the Match: {man_of_match}
-
- ╰⊚(🏏:{wickets}) + (⚾:{sixes})
-
-─────⊱◈◈◈⊰─────
-🧢 Best captain: {best_captain} (🏆: N/A)
- ╰⊚(🏆: {man_of_match}) + (😞:{ducks})</code>"""
-    
-    # Send image with spoiler and caption using parse_mode HTML
-    try:
-        if USER_STATS_IMAGE.startswith(('http://', 'https://')):
-            await client.send_photo(
-                message.chat.id,
-                USER_STATS_IMAGE,
-                caption=stats_text,
-                has_spoiler=True,
-                parse_mode="HTML"
-            )
+        user = message.from_user
+        user_id = user.id
+        name = user.first_name
+        username = user.username
+        
+        # Get or create user from database
+        from database import get_or_create_user
+        
+        # Ensure user exists in database
+        user_data = await get_or_create_user(user_id, name, username)
+        
+        # Get stats from database
+        highest_score = user_data.get("highest_score", 0)
+        highest_score_balls = user_data.get("highest_score_balls", 0)
+        best_game_host = user_data.get("best_game_host", 0)
+        total_runs = user_data.get("total_runs", 0)
+        total_balls = user_data.get("total_balls", 0)
+        wickets = user_data.get("wickets", 0)
+        sixes = user_data.get("sixes", 0)
+        fours = user_data.get("fours", 0)
+        centuries = user_data.get("centuries", 0)
+        fifties = user_data.get("fifties", 0)
+        ducks = user_data.get("ducks", 0)
+        hat_tricks = user_data.get("hat_tricks", 0)
+        man_of_match = user_data.get("man_of_match", 0)
+        best_captain = user_data.get("best_captain", 0)
+        matches_played = user_data.get("matches_played", 0)
+        runs_conceded = user_data.get("runs_conceded", 0)
+        overs_bowled = user_data.get("overs_bowled", 0)
+        
+        # Calculate strike rate
+        strike_rate = round((total_runs / total_balls) * 100, 2) if total_balls > 0 else 0.0
+        
+        # Calculate economy rate
+        economy_rate = round((runs_conceded / overs_bowled), 2) if overs_bowled > 0 else 0.0
+        
+        # Create clickable user mention
+        if username:
+            user_mention = f"<a href='tg://user?id={user_id}'>@{username}</a>"
         else:
-            await client.send_photo(
-                message.chat.id,
-                USER_STATS_IMAGE,
-                caption=stats_text,
-                has_spoiler=True,
-                parse_mode="HTML"
-            )
-    except Exception as e:
-        print(f"Error sending image: {e}")
-        # Fallback - send without image
-        await message.reply(stats_text, parse_mode="HTML")
+            user_mention = f"<a href='tg://user?id={user_id}'>{name}</a>"
+        
+        # Prepare stats text with monospace font
+        stats_text = f"""<code>
+🏏 STATS SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+👤 User     : {user_mention}
+🆔 User ID  : {user_id}
+📅 Date     : {datetime.now().strftime('%Y-%m-%d')}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━
+BATTING STATS
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏆 Highest Score    : {highest_score} ({highest_score_balls} balls)
+📊 Total Runs       : {total_runs}
+🎯 Matches Played   : {matches_played}
+⚡ Strike Rate      : {strike_rate}
+💥 Sixes            : {sixes}
+✨ Fours            : {fours}
+🔥 Centuries        : {centuries}
+⭐ Fifties          : {fifties}
+🦆 Ducks            : {ducks}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━
+BOWLING STATS
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 Wickets          : {wickets}
+🎯 Economy Rate     : {economy_rate}
+🎩 Hat-Tricks       : {hat_tricks}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━
+ACHIEVEMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏅 Man of the Match : {man_of_match}
+🧢 Best Captain     : {best_captain}
+🎮 Best Game Host   : {best_game_host}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━
+</code>"""
+        
+        # Send image with spoiler and caption
+        try:
+            if USER_STATS_IMAGE.startswith(('http://', 'https://')):
+                await client.send_photo(
+                    message.chat.id,
+                    USER_STATS_IMAGE,
+                    caption=stats_text,
+                    has_spoiler=True,
+                    parse_mode="HTML"
+                )
+            else:
+                await client.send_photo(
+                    message.chat.id,
+                    USER_STATS_IMAGE,
+                    caption=stats_text,
+                    has_spoiler=True,
+                    parse_mode="HTML"
+                )
+        except Exception as e:
+            print(f"Error sending image: {e}")
+            await message.reply(stats_text, parse_mode="HTML")
+
+    # ================= USER RANKS COMMAND =================
+    @app.on_message(filters.command("user_ranks") & filters.group)
+    async def user_ranks_cmd(client, message: Message):
+        chat_id = message.chat.id
+        solo_game = games.get(chat_id)
+        team_game = team_games.get(chat_id)
+        
+        if not solo_game and not team_game:
+            await message.reply("❌ No active game found!")
+            return
+        
+        rank_text = "🏆 **Player Ranks** 🏆\n\n"
+        
+        if solo_game and solo_game.get("players"):
+            players = solo_game["players"]
+            sorted_players = sorted(players, key=lambda x: x.get("score", 0), reverse=True)
+            
+            for i, p in enumerate(sorted_players, 1):
+                name = f"@{p['username']}" if p.get('username') else p['name']
+                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📌"
+                rank_text += f"{medal} {i}. {name} - {p.get('score', 0)} runs\n"
+        
+        if team_game:
+            rank_text += "\n**TEAM A:**\n"
+            team_a_players = sorted(team_game.get("team_a", []), key=lambda x: x.get("score", 0), reverse=True)
+            for i, p in enumerate(team_a_players, 1):
+                name = f"@{p['username']}" if p.get('username') else p['name']
+                rank_text += f"   {i}. {name} - {p.get('score', 0)} runs\n"
+            
+            rank_text += "\n**TEAM B:**\n"
+            team_b_players = sorted(team_game.get("team_b", []), key=lambda x: x.get("score", 0), reverse=True)
+            for i, p in enumerate(team_b_players, 1):
+                name = f"@{p['username']}" if p.get('username') else p['name']
+                rank_text += f"   {i}. {name} - {p.get('score', 0)} runs\n"
+        
+        await message.reply(rank_text)
         
     # ================= USER RANKS COMMAND =================
     @app.on_message(filters.command("user_ranks") & filters.group)
