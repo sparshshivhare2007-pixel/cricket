@@ -355,7 +355,7 @@ def register_handlers(app):
         
         await message.reply(help_text)
 
-  # ================= USER INFO COMMAND =================
+# ================= USER INFO COMMAND =================
 @app.on_message(filters.command("user_info") & filters.group)
 async def user_info_cmd(client, message: Message):
     user = message.from_user
