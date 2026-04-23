@@ -1,3 +1,4 @@
+from .test import register_test
 from .user_info import register_user_info
 from .user_ranks import register_user_ranks
 from .member_lists import register_member_lists
@@ -17,6 +18,8 @@ from .add_cap import register_add_cap
 from .rm_cap import register_rm_cap
 
 def register_extra_commands(app):
+    print("📌 Registering extra commands...")
+    register_test(app)
     register_user_info(app)
     register_user_ranks(app)
     register_member_lists(app)
@@ -34,3 +37,4 @@ def register_extra_commands(app):
     register_cap_change(app)
     register_add_cap(app)
     register_rm_cap(app)
+    print("✅ Extra commands registered!")
