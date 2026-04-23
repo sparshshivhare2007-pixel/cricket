@@ -1,4 +1,4 @@
-# bot.py - Final Version (Solo + Extra Commands)
+# bot.py - Fixed Version
 
 from pyrogram import Client
 from config import BOT_TOKEN, API_ID, API_HASH
@@ -31,8 +31,14 @@ async def main():
     print("   - Extra Commands: /help for all commands")
     
     try:
-        await app.run()
+        # FIX: Use app.start() and then idle() instead of app.run()
+        await app.start()
+        print("🤖 Bot is ready! Press Ctrl+C to stop.")
+        await asyncio.Event().wait()  # Wait forever
+    except KeyboardInterrupt:
+        print("\n🛑 Bot shutting down...")
     finally:
+        await app.stop()
         await close_db()
 
 if __name__ == "__main__":
