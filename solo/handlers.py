@@ -31,7 +31,7 @@ async def is_admin(client, chat_id, user_id):
         return False
 
 
-# ================= SOLO MODE SEND BOWLING VIDEO (Define FIRST) =================
+# ================= SOLO MODE SEND BOWLING VIDEO (DEFINE FIRST - BEFORE TIMEOUT) =================
 async def send_bowling_video(client, chat_id, bowler):
     game = games.get(chat_id)
     if not game or game.get("status") != "playing" or game.get("game_over"):
@@ -136,6 +136,46 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
     
     if chat_id in bowling_tasks:
         del bowling_tasks[chat_id]
+
+
+# ================= TEAM MODE SEND BOWLING VIDEO =================
+async def send_bowling_video_team(client, chat_id, bowler):
+    game = team_games.get(chat_id)
+    if not game or game.get("status") != "playing" or game.get("game_over"):
+        return
+    
+    batter = game["current_batter"]
+    bot_username = BOT_USERNAME
+    dm_link = f"https://t.me/{bot_username}"
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🎯 Click to Bowl", url=dm_link)]
+    ])
+    
+    await client.send_video(
+        chat_id, 
+        BOWLING_VIDEO,
+        caption=f"[{bowler['name']}](tg://user?id={bowler['id']}) now you can send number on bot pm, You have 1 min.",
+        reply_markup=keyboard
+    )
+    
+    try:
+        await client.send_message(
+            bowler["id"],
+            f"🎯 Current batter: [{batter['name']}](tg://user?id={batter['id']})\n\nSend Your number (1-6):",
+            disable_web_page_preview=True
+        )
+    except:
+        pass
+    
+    if chat_id in bowling_tasks:
+        try:
+            bowling_tasks[chat_id].cancel()
+        except:
+            pass
+    
+    task = asyncio.create_task(bowling_timeout_with_warnings_team(client, chat_id, bowler["id"], bowler["name"], None))
+    bowling_tasks[chat_id] = task
 
 
 # ================= TEAM MODE TIMEOUT =================
@@ -970,44 +1010,6 @@ Who will be the game host for this match? 🤔"""
         await client.send_message(chat_id, f"🏏 **Team {team} Batting**\n\nBatter: [{game['current_batter']['name']}](tg://user?id={game['current_batter']['id']})\nBowler: [{game['current_bowler']['name']}](tg://user?id={game['current_bowler']['id']})")
         
         await send_bowling_video_team(client, chat_id, game["current_bowler"])
-
-    async def send_bowling_video_team(client, chat_id, bowler):
-        game = team_games.get(chat_id)
-        if not game or game.get("status") != "playing" or game.get("game_over"):
-            return
-        
-        batter = game["current_batter"]
-        bot_username = BOT_USERNAME
-        dm_link = f"https://t.me/{bot_username}"
-        
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🎯 Click to Bowl", url=dm_link)]
-        ])
-        
-        await client.send_video(
-            chat_id, 
-            BOWLING_VIDEO,
-            caption=f"[{bowler['name']}](tg://user?id={bowler['id']}) now you can send number on bot pm, You have 1 min.",
-            reply_markup=keyboard
-        )
-        
-        try:
-            await client.send_message(
-                bowler["id"],
-                f"🎯 Current batter: [{batter['name']}](tg://user?id={batter['id']})\n\nSend Your number (1-6):",
-                disable_web_page_preview=True
-            )
-        except:
-            pass
-        
-        if chat_id in bowling_tasks:
-            try:
-                bowling_tasks[chat_id].cancel()
-            except:
-                pass
-        
-        task = asyncio.create_task(bowling_timeout_with_warnings_team(client, chat_id, bowler["id"], bowler["name"], None))
-        bowling_tasks[chat_id] = task
 
     # ================= ADD TO TEAM A/B =================
     @app.on_message(filters.command("add_A") & filters.group)
