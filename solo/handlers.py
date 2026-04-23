@@ -291,39 +291,283 @@ def register_handlers(app):
     async def score_cmd(client, message: Message):
         await get_live_score(client, message)
 
-    # ================= END MATCH COMMAND =================
+        # ================= END MATCH COMMAND =================
     @app.on_message(filters.command("end_match") & filters.group)
     async def end_match_cmd(client, message: Message):
         chat_id = message.chat.id
         user_id = message.from_user.id
         
-        # Check if user is admin or host
+        # Check if user is admin
         is_group_admin = await is_admin(client, chat_id, user_id)
+        
+        if not is_group_admin:
+            await message.reply("❌ Only group admins can end the match!")
+            return
         
         # Check solo mode game
         solo_game = games.get(chat_id)
         if solo_game and solo_game.get("status") == "playing" and not solo_game.get("game_over"):
-            solo_game["game_over"] = True
-            await message.reply(build_scoreboard(solo_game["players"], is_final=True))
-            await message.reply("🏏 **Match Ended!** 🏏\n\nGame has been ended by admin.")
-            if chat_id in games:
-                del games[chat_id]
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("✅ Yes, End Match", callback_data=f"end_solo_confirm_{chat_id}"),
+                    InlineKeyboardButton("❌ No, Cancel", callback_data="end_cancel")
+                ]
+            ])
+            await message.reply(
+                "⚠️ **Are you sure you want to end the match?**\n\n"
+                "This will stop the current solo game and save the match report.",
+                reply_markup=keyboard
+            )
             return
         
         # Check team mode game
         team_game = team_games.get(chat_id)
         if team_game and team_game.get("status") == "playing" and not team_game.get("game_over"):
-            team_game["game_over"] = True
-            await message.reply(build_team_scoreboard(team_game))
-            await message.reply("🏏 **Match Ended!** 🏏\n\nGame has been ended by admin.")
-            if chat_id in team_games:
-                del team_games[chat_id]
-            if chat_id in team_hosts:
-                del team_hosts[chat_id]
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("✅ Yes, End Match", callback_data=f"end_team_confirm_{chat_id}"),
+                    InlineKeyboardButton("❌ No, Cancel", callback_data="end_cancel")
+                ]
+            ])
+            await message.reply(
+                "⚠️ **Are you sure you want to end the match?**\n\n"
+                "This will stop the current team game and save the match report.",
+                reply_markup=keyboard
+            )
             return
         
         await message.reply("❌ No active game found to end!")
 
+    # ================= END SOLO MATCH CONFIRM =================
+    @app.on_callback_query(filters.regex("^end_solo_confirm_"))
+    async def end_solo_confirm_callback(client, callback):
+        chat_id = int(callback.data.split("_")[3])
+        user_id = callback.from_user.id
+        
+        # Check if user is admin
+        is_group_admin = await is_admin(client, chat_id, user_id)
+        
+        if not is_group_admin:
+            await callback.answer("❌ Only group admins can end the match!", show_alert=True)
+            return
+        
+        game = games.get(chat_id)
+        if not game or game.get("status") != "playing" or game.get("game_over"):
+            await callback.answer("❌ No active game found!", show_alert=True)
+            return
+        
+        game["game_over"] = True
+        game["match_end_time"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Generate match report
+        players = game["players"]
+        match_start_time = game.get("start_time", datetime.now())
+        if isinstance(match_start_time, float):
+            match_start_time = datetime.fromtimestamp(match_start_time).strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            match_start_time = match_start_time.strftime('%Y-%m-%d %H:%M:%S') if hasattr(match_start_time, 'strftime') else str(match_start_time)
+        
+        match_end_time = game.get("match_end_time", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        
+        # Find winner
+        winner = max(players, key=lambda x: x.get("score", 0)) if players else None
+        
+        match_report = f"""═══════════════════════════════
+         🏏 MATCH REPORT 🏏
+═══════════════════════════════
+
+📅 Date: {datetime.now().strftime('%Y-%m-%d')}
+⏰ Start Time: {match_start_time}
+⏰ End Time: {match_end_time}
+🎯 Game Mode: SOLO
+🎯 Ball Mode: {game.get('ball_mode', 3)} balls per bowler
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          📊 FINAL SCORES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+        
+        for i, p in enumerate(players, 1):
+            status = "❌ OUT" if p.get("out", False) else "🏏 NOT OUT"
+            name = f"@{p['username']}" if p.get("username") else p["name"]
+            match_report += f"{i}. {status} {name}\n"
+            match_report += f"   Score: {p.get('score', 0)} runs ({p.get('balls', 0)} balls)\n"
+            match_report += f"   4s: {p.get('fours', 0)} | 6s: {p.get('sixes', 0)}\n"
+            if p.get("history"):
+                history_str = " → ".join(p["history"][-10:])
+                match_report += f"   Ball by Ball: {history_str}\n"
+            match_report += f"   ID: {p['id']}\n\n"
+        
+        if winner:
+            winner_name = f"@{winner['username']}" if winner.get('username') else winner["name"]
+            match_report += f"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            match_report += f"          🏆 WINNER 🏆\n"
+            match_report += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            match_report += f"   🎉 {winner_name} 🎉\n"
+            match_report += f"   Score: {winner.get('score', 0)} runs\n\n"
+        
+        match_report += f"\n═══════════════════════════════\n"
+        match_report += f"      Match Ended by Admin!\n"
+        match_report += f"═══════════════════════════════"
+        
+        # Send report file
+        report_bytes = io.BytesIO(match_report.encode('utf-8'))
+        report_bytes.name = "res.txt"
+        
+        await callback.message.delete()
+        await client.send_message(chat_id, "🏏 **Match Ended!** 🏏")
+        await client.send_document(
+            chat_id,
+            report_bytes,
+            caption="📄 **Match Report**\nGame data saved successfully!"
+        )
+        
+        # Send final scoreboard
+        await client.send_message(chat_id, build_scoreboard(players, is_final=True))
+        
+        # Clean up
+        if chat_id in games:
+            del games[chat_id]
+        
+        await callback.answer("✅ Match ended successfully!")
+
+    # ================= END TEAM MATCH CONFIRM =================
+    @app.on_callback_query(filters.regex("^end_team_confirm_"))
+    async def end_team_confirm_callback(client, callback):
+        chat_id = int(callback.data.split("_")[3])
+        user_id = callback.from_user.id
+        
+        # Check if user is admin
+        is_group_admin = await is_admin(client, chat_id, user_id)
+        
+        if not is_group_admin:
+            await callback.answer("❌ Only group admins can end the match!", show_alert=True)
+            return
+        
+        game = team_games.get(chat_id)
+        if not game or game.get("status") != "playing" or game.get("game_over"):
+            await callback.answer("❌ No active game found!", show_alert=True)
+            return
+        
+        game["game_over"] = True
+        game["match_end_time"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        match_start_time = game.get("match_start_time")
+        if match_start_time:
+            if hasattr(match_start_time, 'strftime'):
+                match_start_time = match_start_time.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                match_start_time = str(match_start_time)
+        else:
+            match_start_time = "Not started"
+        
+        match_end_time = game.get("match_end_time", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        
+        # Determine winner
+        if game.get("team_a_score", 0) > game.get("team_b_score", 0):
+            winner = "Team A"
+            win_margin = f"{game['team_a_score'] - game['team_b_score']} runs"
+        elif game.get("team_b_score", 0) > game.get("team_a_score", 0):
+            winner = "Team B"
+            win_margin = f"{game['team_b_score'] - game['team_a_score']} runs"
+        else:
+            winner = "Match Tied"
+            win_margin = "0 runs"
+        
+        match_report = f"""═══════════════════════════════
+         🏏 MATCH REPORT 🏏
+═══════════════════════════════
+
+📅 Date: {datetime.now().strftime('%Y-%m-%d')}
+⏰ Start Time: {match_start_time}
+⏰ End Time: {match_end_time}
+🎯 Game Mode: TEAM
+🎯 Overs: {game.get('overs', 0)} overs per side
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          📊 FINAL SCORE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏏 TEAM A: {game.get('team_a_score', 0)}/{game.get('team_a_wickets', 0)}
+🏏 TEAM B: {game.get('team_b_score', 0)}/{game.get('team_b_wickets', 0)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          🏆 WINNER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   🎉 {winner} ({win_margin}) 🎉
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         👥 TEAM A PLAYERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+        
+        for p in game.get("team_a", []):
+            status = "❌ OUT" if p.get("out", False) else "🏏"
+            name = f"@{p['username']}" if p.get('username') else p['name']
+            match_report += f"{status} {name}: {p.get('score', 0)} runs ({p.get('balls', 0)} balls)"
+            if p.get('fours', 0) > 0 or p.get('sixes', 0) > 0:
+                match_report += f" (4s: {p.get('fours', 0)}, 6s: {p.get('sixes', 0)})"
+            match_report += "\n"
+        
+        match_report += f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         👥 TEAM B PLAYERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+        
+        for p in game.get("team_b", []):
+            status = "❌ OUT" if p.get("out", False) else "🏏"
+            name = f"@{p['username']}" if p.get('username') else p['name']
+            match_report += f"{status} {name}: {p.get('score', 0)} runs ({p.get('balls', 0)} balls)"
+            if p.get('fours', 0) > 0 or p.get('sixes', 0) > 0:
+                match_report += f" (4s: {p.get('fours', 0)}, 6s: {p.get('sixes', 0)})"
+            match_report += "\n"
+        
+        match_report += f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          🎯 TOSS INFO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏆 Toss Winner: Team {game.get('toss_winner', 'N/A')}
+📝 Decision: {game.get('toss_decision', 'N/A')}
+
+═══════════════════════════════
+      Match Ended by Admin!
+═══════════════════════════════"""
+        
+        # Send report file
+        report_bytes = io.BytesIO(match_report.encode('utf-8'))
+        report_bytes.name = "res.txt"
+        
+        await callback.message.delete()
+        await client.send_message(chat_id, "🏏 **Match Ended!** 🏏")
+        await client.send_document(
+            chat_id,
+            report_bytes,
+            caption="📄 **Match Report**\nGame data saved successfully!"
+        )
+        
+        # Send final scoreboard
+        await client.send_message(chat_id, build_team_scoreboard(game))
+        
+        # Clean up
+        if chat_id in team_games:
+            del team_games[chat_id]
+        if chat_id in team_hosts:
+            del team_hosts[chat_id]
+        
+        await callback.answer("✅ Match ended successfully!")
+
+    # ================= END MATCH CANCEL =================
+    @app.on_callback_query(filters.regex("^end_cancel$"))
+    async def end_cancel_callback(client, callback):
+        await callback.message.delete()
+        await callback.answer("❌ Match end cancelled!")
+        
     # ================= START DM =================
     @app.on_message(filters.command("start") & filters.private)
     async def start_dm(client, message: Message):
