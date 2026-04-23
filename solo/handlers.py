@@ -354,20 +354,96 @@ def register_handlers(app):
         
         await message.reply(help_text)
 
-    # ================= USER INFO COMMAND =================
-    @app.on_message(filters.command("user_info") & filters.group)
-    async def user_info_cmd(client, message: Message):
-        user = message.from_user
-        text = f"""👤 **User Information**
+     # ================= USER INFO COMMAND =================
+@app.on_message(filters.command("user_info") & filters.group)
+async def user_info_cmd(client, message: Message):
+    user = message.from_user
+    user_id = user.id
+    name = user.first_name
+    username = user.username
+    
+    # Get or create user from database
+    from database import get_or_create_user
+    
+    # Ensure user exists in database
+    user_data = await get_or_create_user(user_id, name, username)
+    
+    # Get stats from database
+    highest_score = user_data.get("highest_score", 0)
+    highest_score_balls = user_data.get("highest_score_balls", 0)
+    best_game_host = user_data.get("best_game_host", 0)
+    total_runs = user_data.get("total_runs", 0)
+    total_balls = user_data.get("total_balls", 0)
+    wickets = user_data.get("wickets", 0)
+    sixes = user_data.get("sixes", 0)
+    fours = user_data.get("fours", 0)
+    centuries = user_data.get("centuries", 0)
+    fifties = user_data.get("fifties", 0)
+    ducks = user_data.get("ducks", 0)
+    hat_tricks = user_data.get("hat_tricks", 0)
+    man_of_match = user_data.get("man_of_match", 0)
+    best_captain = user_data.get("best_captain", 0)
+    matches_played = user_data.get("matches_played", 0)
+    runs_conceded = user_data.get("runs_conceded", 0)
+    overs_bowled = user_data.get("overs_bowled", 0)
+    
+    # Calculate strike rate
+    strike_rate = round((total_runs / total_balls) * 100, 2) if total_balls > 0 else 0.0
+    
+    # Calculate economy rate
+    economy_rate = round((runs_conceded / overs_bowled), 2) if overs_bowled > 0 else 0.0
+    
+    # Prepare stats text
+    stats_text = f"""🏏 **Stats Summary**
+👤 User: {name}
+🆔 User ID: {user_id}
+📅 Date: {datetime.now().strftime('%Y-%m-%d')}
+─────⊱◈◈◈⊰─────
+🏆 Highest Score: {highest_score}({highest_score_balls} Balls)
+🎮 Best Game Host: {best_game_host}
+📊 Runs: {total_runs} ({matches_played})
+🎯 Wickets: {wickets}
+💥 Sixes: {sixes}
+✨ Fours: {fours}
+🔥 Centuries: {centuries}
+⭐ Fifties: {fifties}
+🦆 Ducks: {ducks}
+🎩 Hat-Tricks: {hat_tricks}
+⚡ Strike Rate: {strike_rate}
+🎯 Economy Rate: {economy_rate}
+─────⊱◈◈◈⊰─────
+🏅 Man of the Match: {man_of_match}
 
-🆔 **User ID:** `{user.id}`
-📛 **First Name:** {user.first_name}
-🏷️ **Last Name:** {user.last_name if user.last_name else 'N/A'}
-📝 **Username:** @{user.username if user.username else 'N/A'}
-📅 **Date:** {message.date.strftime('%Y-%m-%d %H:%M:%S')}"""
+ ╰⊚(🏏:{wickets}) + (⚾:{sixes})
+
+─────⊱◈◈◈⊰─────
+🧢 Best captain: {best_captain} (🏆: N/A)
+ ╰⊚(🏆: {man_of_match}) + (😞:{ducks})"""
+    
+    # Send image with spoiler and caption
+    try:
+        # Check if USER_STATS_IMAGE is a file_id or URL
+        if USER_STATS_IMAGE.startswith(('http://', 'https://')):
+            # It's a URL
+            await client.send_photo(
+                message.chat.id,
+                USER_STATS_IMAGE,
+                caption=stats_text,
+                has_spoiler=True
+            )
+        else:
+            # It's a file_id from Telegram
+            await client.send_photo(
+                message.chat.id,
+                USER_STATS_IMAGE,
+                caption=stats_text,
+                has_spoiler=True
+            )
+    except Exception as e:
+        print(f"Error sending image: {e}")
+        # Fallback - send without image
+        await message.reply(stats_text)
         
-        await message.reply(text)
-
     # ================= USER RANKS COMMAND =================
     @app.on_message(filters.command("user_ranks") & filters.group)
     async def user_ranks_cmd(client, message: Message):
