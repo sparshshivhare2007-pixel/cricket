@@ -109,7 +109,6 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
         current_bowler = game.get("current_bowler", {})
         if current_bowler.get("id") == user_id and game.get("bowling_number") is None:
             
-            # Penalty: -6 runs from bowler's score
             for player in game["players"]:
                 if player["id"] == user_id:
                     player["score"] -= 6
@@ -355,19 +354,19 @@ def register_handlers(app):
         
         await message.reply(help_text)
 
-# ================= USER INFO COMMAND =================
-@app.on_message(filters.command("user_info") & filters.group)
-async def user_info_cmd(client, message: Message):
-    user = message.from_user
-    text = f"""👤 **User Information**
+    # ================= USER INFO COMMAND =================
+    @app.on_message(filters.command("user_info") & filters.group)
+    async def user_info_cmd(client, message: Message):
+        user = message.from_user
+        text = f"""👤 **User Information**
 
 🆔 **User ID:** `{user.id}`
 📛 **First Name:** {user.first_name}
 🏷️ **Last Name:** {user.last_name if user.last_name else 'N/A'}
 📝 **Username:** @{user.username if user.username else 'N/A'}
 📅 **Date:** {message.date.strftime('%Y-%m-%d %H:%M:%S')}"""
-    
-    await message.reply(text)
+        
+        await message.reply(text)
 
     # ================= USER RANKS COMMAND =================
     @app.on_message(filters.command("user_ranks") & filters.group)
@@ -714,7 +713,7 @@ async def user_info_cmd(client, message: Message):
         
         await message.reply(stats_text)
 
-    # ================= BATTING COMMAND (Team Mode) =================
+    # ================= BATTING COMMAND =================
     @app.on_message(filters.command("batting") & filters.group)
     async def batting_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -758,7 +757,7 @@ async def user_info_cmd(client, message: Message):
         
         await message.reply(f"✅ Batting order updated!\nNew batter at position {args[1]}: {players[position]['name']}")
 
-    # ================= BOWLING COMMAND (Team Mode) =================
+    # ================= BOWLING COMMAND =================
     @app.on_message(filters.command("bowling") & filters.group)
     async def bowling_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -1404,17 +1403,14 @@ async def user_info_cmd(client, message: Message):
             await callback.answer("❌ Team A captain already selected!", show_alert=True)
             return
         
-        user_name = ""
         for player in game["team_a"]:
             if player["id"] == user_id:
-                user_name = player["name"]
                 game["captain_a"] = player
+                await callback.answer(f"✅ {player['name']} is now Team A Captain!")
                 break
         else:
             await callback.answer("❌ You are not in Team A!", show_alert=True)
             return
-        
-        await callback.answer(f"✅ {user_name} is now Team A Captain!")
         
         if game.get("captain_a") and game.get("captain_b"):
             await callback.message.delete()
@@ -1422,7 +1418,7 @@ async def user_info_cmd(client, message: Message):
         else:
             keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏏 Choose Team B Captain 🏏", callback_data="choose_cap_b")]])
             await callback.message.edit_text(
-                f"🏏 **Captain Selection!** 🏏\n\n✅ Team A Captain: {user_name}\n⚠️ Team B Captain: Not selected yet\n\nTeam B members click 'Team B Captain' button to become captain.",
+                f"🏏 **Captain Selection!** 🏏\n\n✅ Team A Captain: {game['captain_a']['name']}\n⚠️ Team B Captain: Not selected yet\n\nTeam B members click 'Team B Captain' button to become captain.",
                 reply_markup=keyboard
             )
 
@@ -1440,17 +1436,14 @@ async def user_info_cmd(client, message: Message):
             await callback.answer("❌ Team B captain already selected!", show_alert=True)
             return
         
-        user_name = ""
         for player in game["team_b"]:
             if player["id"] == user_id:
-                user_name = player["name"]
                 game["captain_b"] = player
+                await callback.answer(f"✅ {player['name']} is now Team B Captain!")
                 break
         else:
             await callback.answer("❌ You are not in Team B!", show_alert=True)
             return
-        
-        await callback.answer(f"✅ {user_name} is now Team B Captain!")
         
         if game.get("captain_a") and game.get("captain_b"):
             await callback.message.delete()
@@ -1458,7 +1451,7 @@ async def user_info_cmd(client, message: Message):
         else:
             keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏏 Choose Team A Captain 🏏", callback_data="choose_cap_a")]])
             await callback.message.edit_text(
-                f"🏏 **Captain Selection!** 🏏\n\n⚠️ Team A Captain: Not selected yet\n✅ Team B Captain: {user_name}\n\nTeam A members click 'Team A Captain' button to become captain.",
+                f"🏏 **Captain Selection!** 🏏\n\n⚠️ Team A Captain: Not selected yet\n✅ Team B Captain: {game['captain_b']['name']}\n\nTeam A members click 'Team A Captain' button to become captain.",
                 reply_markup=keyboard
             )
 
