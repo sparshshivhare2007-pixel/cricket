@@ -31,6 +31,46 @@ async def is_admin(client, chat_id, user_id):
         return False
 
 
+# ================= SOLO MODE SEND BOWLING VIDEO (Define FIRST) =================
+async def send_bowling_video(client, chat_id, bowler):
+    game = games.get(chat_id)
+    if not game or game.get("status") != "playing" or game.get("game_over"):
+        return
+    
+    batter = game["current_batter"]
+    bot_username = BOT_USERNAME
+    dm_link = f"https://t.me/{bot_username}"
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🎯 Click to Bowl", url=dm_link)]
+    ])
+    
+    await client.send_video(
+        chat_id, 
+        BOWLING_VIDEO,
+        caption=f"[{bowler['name']}](tg://user?id={bowler['id']}) now you can send number on bot pm, You have 1 min.",
+        reply_markup=keyboard
+    )
+    
+    try:
+        await client.send_message(
+            bowler["id"],
+            f"🎯 Current batter: [{batter['name']}](tg://user?id={batter['id']})\n\nSend Your number (1-6):",
+            disable_web_page_preview=True
+        )
+    except:
+        pass
+    
+    if chat_id in bowling_tasks:
+        try:
+            bowling_tasks[chat_id].cancel()
+        except:
+            pass
+    
+    task = asyncio.create_task(bowling_timeout_with_warnings(client, chat_id, bowler["id"], bowler["name"], None))
+    bowling_tasks[chat_id] = task
+
+
 # ================= SOLO MODE TIMEOUT (No Bowler Change) =================
 async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, message_id):
     await asyncio.sleep(30)
@@ -92,7 +132,6 @@ async def bowling_timeout_with_warnings(client, chat_id, user_id, bowler_name, m
             game["total_balls_in_match"] += 1
             
             # ✅ SAME BOWLER CONTINUES - No bowler change
-            # Just send bowling video again to the same bowler
             await send_bowling_video(client, chat_id, game["current_bowler"])
     
     if chat_id in bowling_tasks:
@@ -421,44 +460,6 @@ Choose how you want to play:"""
         
         await asyncio.sleep(1)
         await send_bowling_video(client, chat_id, bowler)
-
-    async def send_bowling_video(client, chat_id, bowler):
-        game = games.get(chat_id)
-        if not game or game.get("status") != "playing" or game.get("game_over"):
-            return
-        
-        batter = game["current_batter"]
-        bot_username = BOT_USERNAME
-        dm_link = f"https://t.me/{bot_username}"
-        
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🎯 Click to Bowl", url=dm_link)]
-        ])
-        
-        await client.send_video(
-            chat_id, 
-            BOWLING_VIDEO,
-            caption=f"[{bowler['name']}](tg://user?id={bowler['id']}) now you can send number on bot pm, You have 1 min.",
-            reply_markup=keyboard
-        )
-        
-        try:
-            await client.send_message(
-                bowler["id"],
-                f"🎯 Current batter: [{batter['name']}](tg://user?id={batter['id']})\n\nSend Your number (1-6):",
-                disable_web_page_preview=True
-            )
-        except:
-            pass
-        
-        if chat_id in bowling_tasks:
-            try:
-                bowling_tasks[chat_id].cancel()
-            except:
-                pass
-        
-        task = asyncio.create_task(bowling_timeout_with_warnings(client, chat_id, bowler["id"], bowler["name"], None))
-        bowling_tasks[chat_id] = task
 
     # ================= TEAM MODE =================
     async def team_mode_start(client, callback):
