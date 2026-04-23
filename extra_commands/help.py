@@ -2,9 +2,11 @@ from pyrogram import filters
 from pyrogram.types import Message
 
 def register_help(app):
-    
-    @app.on_message(filters.command("help") & filters.group)
+
+    @app.on_message(filters.command(["help"], prefixes=["/"]) & filters.group)
     async def help_cmd(client, message: Message):
+        print("🔥 help command triggered")  # debug
+
         help_text = """🏏 **Cricket Game Bot Help** 🏏
 
 **🎮 GAME COMMANDS:**
@@ -48,4 +50,5 @@ def register_help(app):
 
 **📞 Support:** @YourSupportUsername
 """
-        await message.reply(help_text)
+
+        await message.reply(help_text, disable_web_page_preview=True)
