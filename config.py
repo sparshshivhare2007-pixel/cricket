@@ -54,6 +54,7 @@ TEAM_CHAPU_IMG = "https://files.catbox.moe/9w291u.jpg"
 # Toss video
 TOSS_VIDEO = "https://files.catbox.moe/hhbun3.mp4"
 VOTE_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
+USER_STATS_IMAGE = "https://files.catbox.moe/0odkk1.jpg"
 SOLO_PLAY_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 HOST_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 SOLO_GAME_START_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
