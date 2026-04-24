@@ -265,7 +265,7 @@ def build_team_scoreboard(game):
         status = "❌" if p.get("out", False) else "🏏"
         scoreboard += f"{status} {p['name']}: {p['score']} ({p['balls']} balls)"
         if p.get('fours', 0) > 0 or p.get('sixes', 0) > 0:
-            scoreboard += f" [4s:{p['fours']} 6s:p['sixes']}]"
+            scoreboard += f" [4s:{p['fours']} 6s:{p['sixes']}]"
         scoreboard += "\n"
     
     return scoreboard
