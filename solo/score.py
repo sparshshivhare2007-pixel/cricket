@@ -5,6 +5,14 @@ from solo.scoreboard import build_scoreboard
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from config import LIVE_SCORE_LINK, SOLO_ICONS
 
+# Global reference for team_games (will be set from handlers)
+team_games_ref = None
+
+def set_team_games_ref(team_games):
+    global team_games_ref
+    team_games_ref = team_games
+    print("🔴 team_games reference set in score.py")
+
 def build_solo_scoreboard(players, is_final=False):
     """Build solo scoreboard text from players list"""
     if not players:
@@ -18,8 +26,8 @@ def build_solo_scoreboard(players, is_final=False):
         sorted_players = players
 
     for i, p in enumerate(sorted_players, start=1):
-        icon = SOLO_ICONS[i % len(SOLO_ICONS)]
-        history = ", ".join(map(str, p["history"][-5:]))
+        icon = SOLO_ICONS[i % len(SOLO_ICONS)] if SOLO_ICONS else "🏏"
+        history = ", ".join(map(str, p.get("history", [])[-5:]))
         
         runs = p.get('score', 0)
         balls = p.get('balls', 0)
@@ -46,8 +54,11 @@ def build_solo_scoreboard(players, is_final=False):
     
     return text
 
-def build_team_scoreboard(game):
+def build_team_scoreboard_text(game):
     """Build team scoreboard text"""
+    if not game:
+        return "📊 No game found!"
+    
     team_a = game.get("team_a", [])
     team_b = game.get("team_b", [])
     team_a_score = game.get("team_a_score", 0)
@@ -88,6 +99,7 @@ def build_team_scoreboard(game):
 async def get_live_score(client, message):
     """Unified live score - works for both solo and team mode"""
     chat_id = message.chat.id
+    print(f"🔴 GET_LIVE_SCORE called for chat: {chat_id}")
     
     # Create inline button for live score link
     keyboard = InlineKeyboardMarkup([
@@ -96,6 +108,7 @@ async def get_live_score(client, message):
     
     # Check for SOLO mode first
     solo_game = games.get(chat_id)
+    
     if solo_game:
         if solo_game.get("status") == "waiting":
             players_count = len(solo_game.get("players", []))
@@ -112,28 +125,30 @@ async def get_live_score(client, message):
         return
     
     # Check for TEAM mode
-    team_game = team_games.get(chat_id)
-    if team_game:
-        if team_game.get("status") == "waiting_host":
-            text = f"⏳ **TEAM MODE - Waiting for Host**\n\n👑 Host: {team_game.get('host_name', 'Unknown')}\n\nHost type `/create_team` to start!"
-        elif team_game.get("status") in ["team_creation_a", "team_creation_b"]:
-            team_a_count = len(team_game.get("team_a", []))
-            team_b_count = len(team_game.get("team_b", []))
-            text = f"🎯 **TEAM MODE - Team Creation**\n\n🏏 Team A: {team_a_count} players\n🏏 Team B: {team_b_count} players"
-        elif team_game.get("status") == "ready":
-            team_a_count = len(team_game.get("team_a", []))
-            team_b_count = len(team_game.get("team_b", []))
-            text = f"✅ **TEAM MODE - Teams Ready**\n\n🏏 Team A: {team_a_count} players\n🏏 Team B: {team_b_count} players\n\nType `/start_match` to begin!"
-        elif team_game.get("status") == "playing" and not team_game.get("game_over"):
-            text = build_team_scoreboard(team_game)
-        elif team_game.get("game_over"):
-            winner = team_game.get("winner", "Unknown")
-            text = f"🏆 **GAME OVER** 🏆\n\n🏅 Winner: {winner}\n\nUse /start to play again!"
-        else:
-            text = "📊 No active game!"
+    if team_games_ref:
+        team_game = team_games_ref.get(chat_id)
         
-        await message.reply(text, reply_markup=keyboard, disable_web_page_preview=True)
-        return
+        if team_game:
+            if team_game.get("status") == "waiting_host":
+                text = f"⏳ **TEAM MODE - Waiting for Host**\n\n👑 Host: {team_game.get('host_name', 'Unknown')}\n\nHost type `/create_team` to start!"
+            elif team_game.get("status") in ["team_creation_a", "team_creation_b"]:
+                team_a_count = len(team_game.get("team_a", []))
+                team_b_count = len(team_game.get("team_b", []))
+                text = f"🎯 **TEAM MODE - Team Creation**\n\n🏏 Team A: {team_a_count} players\n🏏 Team B: {team_b_count} players"
+            elif team_game.get("status") == "ready":
+                team_a_count = len(team_game.get("team_a", []))
+                team_b_count = len(team_game.get("team_b", []))
+                text = f"✅ **TEAM MODE - Teams Ready**\n\n🏏 Team A: {team_a_count} players\n🏏 Team B: {team_b_count} players\n\nType `/start_match` to begin!"
+            elif team_game.get("status") == "playing" and not team_game.get("game_over"):
+                text = build_team_scoreboard_text(team_game)
+            elif team_game.get("game_over"):
+                winner = team_game.get("winner", "Unknown")
+                text = f"🏆 **GAME OVER** 🏆\n\n🏅 Winner: {winner}\n\nUse /start to play again!"
+            else:
+                text = "📊 No active game!"
+            
+            await message.reply(text, reply_markup=keyboard, disable_web_page_preview=True)
+            return
     
     # No active game
     await message.reply("❌ No active game in this chat!\n\nUse /start to create a game.", reply_markup=keyboard)
