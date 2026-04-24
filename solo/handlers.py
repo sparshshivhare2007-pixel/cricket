@@ -409,7 +409,70 @@ def register_handlers(app):
             print(f"Error sending image: {e}")
             await message.reply(stats_text.replace(user_mention, f"@{username}" if username else name))
             
-            @app.on_message(filters.command("user_ranks") & filters.group)
+                # ================= USER INFO COMMAND =================
+    @app.on_message(filters.command("user_info") & filters.group)
+    async def user_info_cmd(client, message: Message):
+        from pyrogram.enums import ParseMode
+        
+        user = message.from_user
+        user_id = user.id
+        name = user.first_name
+        username = user.username
+        
+        from database import get_or_create_user
+        user_data = await get_or_create_user(user_id, name, username)
+        
+        highest_score = user_data.get("highest_score", 0)
+        highest_score_balls = user_data.get("highest_score_balls", 0)
+        total_runs = user_data.get("total_runs", 0)
+        total_balls = user_data.get("total_balls", 0)
+        wickets = user_data.get("wickets", 0)
+        centuries = user_data.get("centuries", 0)
+        fifties = user_data.get("fifties", 0)
+        matches_played = user_data.get("matches_played", 0)
+        
+        strike_rate = round((total_runs / total_balls) * 100, 2) if total_balls > 0 else 0.0
+        
+        if username:
+            user_mention = f'<a href="tg://user?id={user_id}">@{username}</a>'
+        else:
+            user_mention = f'<a href="tg://user?id={user_id}">{name}</a>'
+        
+        stats_text = f"""🏏 Stats Summary
+👤 User: {user_mention}
+🆔 User ID: {user_id}
+─────⊱◈◈◈⊰─────
+🏆 Highest Score: {highest_score} ({highest_score_balls} Balls)
+📊 Runs: {total_runs} ({matches_played})
+🎯 Wickets: {wickets}
+🔥 Centuries: {centuries}
+⭐ Fifties: {fifties}
+⚡ Strike Rate: {strike_rate}
+─────⊱◈◈◈⊰─────"""
+        
+        try:
+            if USER_STATS_IMAGE.startswith(('http://', 'https://')):
+                await client.send_photo(
+                    message.chat.id,
+                    USER_STATS_IMAGE,
+                    caption=stats_text,
+                    has_spoiler=True,
+                    parse_mode=ParseMode.HTML
+                )
+            else:
+                await client.send_photo(
+                    message.chat.id,
+                    USER_STATS_IMAGE,
+                    caption=stats_text,
+                    has_spoiler=True,
+                    parse_mode=ParseMode.HTML
+                )
+        except Exception as e:
+            print(f"Error sending image: {e}")
+            await message.reply(stats_text.replace(user_mention, f"@{username}" if username else name))
+
+    # ================= USER RANKS COMMAND =================
+    @app.on_message(filters.command("user_ranks") & filters.group)
     async def user_ranks_cmd(client, message: Message):
         from pyrogram.enums import ParseMode
         from database import get_or_create_user
@@ -461,17 +524,21 @@ def register_handlers(app):
         ])
         
         try:
-            await client.send_photo(
-                message.chat.id,
-                USER_RANKS_IMAGE,
-                caption=stats_text,
-                reply_markup=keyboard,
-                parse_mode=ParseMode.HTML
-            )
+            if USER_RANKS_IMAGE:
+                await client.send_photo(
+                    message.chat.id,
+                    USER_RANKS_IMAGE,
+                    caption=stats_text,
+                    reply_markup=keyboard,
+                    parse_mode=ParseMode.HTML
+                )
+            else:
+                await message.reply(stats_text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Error sending user ranks: {e}")
             await message.reply(stats_text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
+    # ================= RANK BUTTON HANDLERS =================
     @app.on_callback_query(filters.regex("^rank_"))
     async def rank_buttons_handler(client, callback: CallbackQuery):
         from database import get_all_users_stats
@@ -480,7 +547,6 @@ def register_handlers(app):
         action = callback.data.split("_")[1]
         all_users = await get_all_users_stats()
         
-        text = ""
         if action == "1v1":
             text = "🏆 **1 vs 1 Leaderboard**\n\nComing soon!"
         elif action == "ducks":
@@ -579,6 +645,7 @@ def register_handlers(app):
         await callback.message.edit_caption(caption=text, reply_markup=back_button, parse_mode=ParseMode.HTML)
         await callback.answer()
 
+    # ================= BACK TO RANKS BUTTON =================
     @app.on_callback_query(filters.regex("^back_to_ranks$"))
     async def back_to_ranks_callback(client, callback: CallbackQuery):
         from database import get_or_create_user
@@ -632,7 +699,7 @@ def register_handlers(app):
         
         await callback.message.edit_caption(caption=stats_text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
         await callback.answer()
-
+        
     @app.on_message(filters.command("member_lists") & filters.group)
     async def member_lists_cmd(client, message: Message):
         chat_id = message.chat.id
