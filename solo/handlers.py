@@ -905,6 +905,12 @@ def register_handlers(app):
             await message.reply("❌ You are the host! Host cannot join any team.")
             return
         
+        # CHECK: User already in Team B?
+        for p in game.get("team_b", []):
+            if p["id"] == user.id:
+                await message.reply("❌ You are already in Team B! You cannot join Team A.")
+                return
+        
         for p in game.get("team_a", []):
             if p["id"] == user.id:
                 await message.reply("❌ You already joined Team A!")
@@ -942,6 +948,12 @@ def register_handlers(app):
         if host and host.get("id") == user.id:
             await message.reply("❌ You are the host! Host cannot join any team.")
             return
+        
+        # CHECK: User already in Team A?
+        for p in game.get("team_a", []):
+            if p["id"] == user.id:
+                await message.reply("❌ You are already in Team A! You cannot join Team B.")
+                return
         
         for p in game.get("team_b", []):
             if p["id"] == user.id:
@@ -996,6 +1008,12 @@ def register_handlers(app):
             await message.reply("❌ Usage: /add_A @username or reply to a user's message")
             return
         
+        # CHECK: User already in Team B?
+        for p in game.get("team_b", []):
+            if p["id"] == added_user.id:
+                await message.reply(f"❌ {added_user.first_name} is already in Team B!")
+                return
+        
         for p in game.get("team_a", []):
             if p["id"] == added_user.id:
                 await message.reply(f"❌ Already in Team A!")
@@ -1048,6 +1066,12 @@ def register_handlers(app):
         if not added_user:
             await message.reply("❌ Usage: /add_B @username or reply to a user's message")
             return
+        
+        # CHECK: User already in Team A?
+        for p in game.get("team_a", []):
+            if p["id"] == added_user.id:
+                await message.reply(f"❌ {added_user.first_name} is already in Team A!")
+                return
         
         for p in game.get("team_b", []):
             if p["id"] == added_user.id:
@@ -1405,6 +1429,7 @@ def register_handlers(app):
             winner_clickable = cap_b_clickable
             winner_team = "B"
         
+        # Complete caption with video
         caption_text = f"🪙 The coin shows: {toss_result.upper()}!\n\n"
         caption_text += f"🅰️ - {cap_a_clickable} chose {choice.upper()}\n"
         caption_text += f"🅱️ {cap_b_clickable} got {toss_result.upper()}\n\n"
@@ -1455,7 +1480,7 @@ def register_handlers(app):
         await callback.message.delete()
         
         team_name = "Team A" if batting_team == "A" else "Team B"
-        await client.send_message(chat_id, f"✅ {'BAT FIRST' if decision == 'bat' else 'BOWL FIRST'} selected!\n\n🏏 {team_name} will bat first!\n\n📊 Now select number of overs:")
+        await client.send_message(chat_id, f"🏏 - {team_name} chose to {'Batting' if decision == 'bat' else 'Bowling'} first.\nTeam {'B' if batting_team == 'A' else 'A'} will {'Bowling' if decision == 'bat' else 'Batting'}.\n\n🏏 Batting: Team {batting_team}\n🧤 Bowling: Team {'B' if batting_team == 'A' else 'A'}")
         
         await select_overs(client, chat_id, batting_team)
 
