@@ -9,7 +9,7 @@ import asyncio
 from datetime import datetime
 import random
 
-print("🔴 LOADING HANDLERS.PY - FINAL CORRECTED VERSION")
+print("🔴 LOADING HANDLERS.PY - FINAL VERSION")
 
 active_votes = {}
 bowling_tasks = {}
@@ -1060,12 +1060,17 @@ def register_handlers(app):
         game["team_b"].append(player_data)
         await message.reply(f"added {added_user.first_name} to Team B! ({len(game['team_b'])} players)")
 
-    # ================= BATTING =================
+    # ================= BATTING (LAST - TO AVOID CONFLICT) =================
     @app.on_message(filters.group & filters.text & ~filters.bot)
-    async def batting_msg(client, message):
-        chat_id = message.chat.id
+    async def batting_msg(client, message: Message):
+        text = message.text.strip()
         
-        print(f"🔴 BATTING MSG - Chat: {chat_id}, Text: {message.text}")
+        # IGNORE ALL COMMANDS (starting with /)
+        if text.startswith('/'):
+            return
+        
+        chat_id = message.chat.id
+        print(f"🔴 BATTING MSG - Chat: {chat_id}, Text: {text}")
         
         # Solo mode
         game = games.get(chat_id)
@@ -1077,7 +1082,6 @@ def register_handlers(app):
             if not batter or message.from_user.id != batter.get("id"):
                 return
             
-            text = message.text.strip()
             if not text.isdigit() or int(text) not in range(1, 7):
                 return await message.reply(INVALID_NUMBER)
             
@@ -1132,7 +1136,6 @@ def register_handlers(app):
         if not batter or message.from_user.id != batter.get("id"):
             return
         
-        text = message.text.strip()
         if not text.isdigit() or int(text) not in range(1, 7):
             return await message.reply(INVALID_NUMBER)
         
@@ -1308,7 +1311,6 @@ def register_handlers(app):
         
         num = int(text)
         
-        # Solo mode
         for chat_id, game in games.items():
             if game.get("status") != "playing" or game.get("game_over"):
                 continue
@@ -1330,7 +1332,6 @@ def register_handlers(app):
             await client.send_video(chat_id, BATTING_VIDEO, caption=f"Hey {batter_clickable}, now you're batting! Send number (1-6) in GROUP")
             return
         
-        # Team mode
         for chat_id, game in team_games.items():
             if game.get("status") != "playing" or game.get("game_over"):
                 continue
@@ -1422,5 +1423,3 @@ def register_handlers(app):
             vote["active"] = False
 
     print("🔴 ✅ ALL HANDLERS REGISTERED SUCCESSFULLY!")
-
-    # ================= END OF register_handlers =================
