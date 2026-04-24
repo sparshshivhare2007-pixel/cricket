@@ -135,10 +135,18 @@ async def get_live_score(client, message):
                 team_a_count = len(team_game.get("team_a", []))
                 team_b_count = len(team_game.get("team_b", []))
                 text = f"🎯 **TEAM MODE - Team Creation**\n\n🏏 Team A: {team_a_count} players\n🏏 Team B: {team_b_count} players"
+            elif team_game.get("status") == "captain_selection":
+                team_a_count = len(team_game.get("team_a", []))
+                team_b_count = len(team_game.get("team_b", []))
+                text = f"👑 **TEAM MODE - Captain Selection**\n\n🏏 Team A: {team_a_count} players\n🏏 Team B: {team_b_count} players\n\nHost type `/choose_cap` to select captains!"
             elif team_game.get("status") == "ready":
                 team_a_count = len(team_game.get("team_a", []))
                 team_b_count = len(team_game.get("team_b", []))
-                text = f"✅ **TEAM MODE - Teams Ready**\n\n🏏 Team A: {team_a_count} players\n🏏 Team B: {team_b_count} players\n\nType `/start_match` to begin!"
+                cap_a = team_game.get('captain_a', {})
+                cap_b = team_game.get('captain_b', {})
+                cap_a_name = f"@{cap_a.get('username')}" if cap_a.get('username') else cap_a.get('name', 'Not selected')
+                cap_b_name = f"@{cap_b.get('username')}" if cap_b.get('username') else cap_b.get('name', 'Not selected')
+                text = f"✅ **TEAM MODE - Teams Ready**\n\n🏏 Team A: {team_a_count} players\n👑 Team A Captain: {cap_a_name}\n🏏 Team B: {team_b_count} players\n👑 Team B Captain: {cap_b_name}\n\nType `/start_match` to begin!"
             elif team_game.get("status") == "playing" and not team_game.get("game_over"):
                 text = build_team_scoreboard_text(team_game)
             elif team_game.get("game_over"):
