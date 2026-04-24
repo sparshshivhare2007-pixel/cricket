@@ -366,71 +366,6 @@ def register_handlers(app):
         fifties = user_data.get("fifties", 0)
         matches_played = user_data.get("matches_played", 0)
         
-        # Calculate strike rate
-        strike_rate = round((total_runs / total_balls) * 100, 2) if total_balls > 0 else 0.0
-        
-        # Create clickable user mention
-        if username:
-            user_mention = f'<a href="tg://user?id={user_id}">@{username}</a>'
-        else:
-            user_mention = f'<a href="tg://user?id={user_id}">{name}</a>'
-        
-        # Prepare stats text (removed: Date, Best Game Host, Sixes, Fours, Ducks, Man of Match, Best Captain)
-        stats_text = f"""🏏 Stats Summary
-👤 User: {user_mention}
-🆔 User ID: {user_id}
-─────⊱◈◈◈⊰─────
-🏆 Highest Score: {highest_score} ({highest_score_balls} Balls)
-📊 Runs: {total_runs} ({matches_played})
-🎯 Wickets: {wickets}
-🔥 Centuries: {centuries}
-⭐ Fifties: {fifties}
-⚡ Strike Rate: {strike_rate}
-─────⊱◈◈◈⊰─────"""
-        
-        try:
-            if USER_STATS_IMAGE.startswith(('http://', 'https://')):
-                await client.send_photo(
-                    message.chat.id,
-                    USER_STATS_IMAGE,
-                    caption=stats_text,
-                    has_spoiler=True,
-                    parse_mode=ParseMode.HTML
-                )
-            else:
-                await client.send_photo(
-                    message.chat.id,
-                    USER_STATS_IMAGE,
-                    caption=stats_text,
-                    has_spoiler=True,
-                    parse_mode=ParseMode.HTML
-                )
-        except Exception as e:
-            print(f"Error sending image: {e}")
-            await message.reply(stats_text.replace(user_mention, f"@{username}" if username else name))
-            
-                # ================= USER INFO COMMAND =================
-    @app.on_message(filters.command("user_info") & filters.group)
-    async def user_info_cmd(client, message: Message):
-        from pyrogram.enums import ParseMode
-        
-        user = message.from_user
-        user_id = user.id
-        name = user.first_name
-        username = user.username
-        
-        from database import get_or_create_user
-        user_data = await get_or_create_user(user_id, name, username)
-        
-        highest_score = user_data.get("highest_score", 0)
-        highest_score_balls = user_data.get("highest_score_balls", 0)
-        total_runs = user_data.get("total_runs", 0)
-        total_balls = user_data.get("total_balls", 0)
-        wickets = user_data.get("wickets", 0)
-        centuries = user_data.get("centuries", 0)
-        fifties = user_data.get("fifties", 0)
-        matches_played = user_data.get("matches_played", 0)
-        
         strike_rate = round((total_runs / total_balls) * 100, 2) if total_balls > 0 else 0.0
         
         if username:
@@ -1763,6 +1698,10 @@ def register_handlers(app):
         if join_game(chat_id, message.from_user):
             players_count = len(game["players"])
             await message.reply(f"🎉 {message.from_user.first_name}, you've joined the solo game! (Player {players_count}) 👍")
+            
+            if players_count >= 4:
+                await client.send_message(chat_id, f"✅ {players_count} players joined! Starting game...")
+                await start_game_match(client, chat_id)
 
     async def start_game_match(client, chat_id):
         game = games.get(chat_id)
