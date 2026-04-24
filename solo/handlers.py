@@ -1747,33 +1747,29 @@ def register_handlers(app):
         
         print(f"🔴 START_JOIN_TIMER ended for chat: {chat_id}")
 
-    # ================= JOIN GAME COMMAND (WORKING) =================
+    # ================= JOIN GAME COMMAND =================
     @app.on_message(filters.command("joingame") & filters.group)
     async def join_game_cmd(client, message: Message):
         chat_id = message.chat.id
-        print(f"🔴 ========== JOIN GAME COMMAND ==========")
-        print(f"🔴 Chat ID: {chat_id}")
+        user = message.from_user
+        
+        print(f"🔴 JOIN GAME - Chat: {chat_id}, User: {user.id}")
         
         game = games.get(chat_id)
-        print(f"🔴 Game exists: {game is not None}")
         
         if not game:
-            return await message.reply("❌ No active solo game! Use /start and select Solo mode first.")
-        
-        print(f"🔴 Game status: {game.get('status')}")
-        print(f"🔴 Current players: {len(game.get('players', []))}")
+            await message.reply("❌ No active solo game! Use /start and select Solo mode first.")
+            return
         
         if game.get("status") != "waiting":
-            return await message.reply("❌ Game already started! Cannot join now.")
-        
-        user = message.from_user
-        print(f"🔴 User: {user.first_name} (ID: {user.id})")
+            await message.reply("❌ Game already started! Cannot join now.")
+            return
         
         # Check if already joined
         for p in game.get("players", []):
             if p["id"] == user.id:
-                print(f"🔴 User already joined")
-                return await message.reply("❌ You already joined this game!")
+                await message.reply("❌ You already joined this game!")
+                return
         
         # Add player
         player_data = {
@@ -1793,20 +1789,51 @@ def register_handlers(app):
         
         game["players"].append(player_data)
         players_count = len(game["players"])
-        print(f"🔴 Player added! Total players: {players_count}")
         
         await message.reply(f"🎉 {user.first_name}, you've joined the solo game! (Player {players_count}) 👍")
         
         # Auto start when 4 players join
         if players_count >= 4:
-            print(f"🔴 Auto-starting game with {players_count} players")
             await client.send_message(chat_id, f"✅ {players_count} players joined! Starting game in 3 seconds...")
             await asyncio.sleep(3)
             await start_game_match(client, chat_id)
-        
-        print(f"🔴 ========== JOIN GAME END ==========")
-
+    
     async def start_game_match(client, chat_id):
+        print(f"🔴 START_GAME_MATCH - Chat: {chat_id}")
+        game = games.get(chat_id)
+        if not game or game["status"] != "waiting":
+            return
+        
+        players_count = len(game["players"])
+        if players_count < 4:
+            await client.send_message(chat_id, f"❌ Minimum 4 players required! Current: {players_count}/4")
+            if chat_id in games:
+                del games[chat_id]
+            return
+        
+        start_match(chat_id)
+        game = games[chat_id]
+        players = game["players"]
+        
+        host_text = "🏏 **SOLO CRICKET** 🏏\n\n**Players List:**\n"
+        for i, p in enumerate(players, 1):
+            host_text += f"{i}. [{p['name']}](tg://user?id={p['id']})\n"
+        
+        try:
+            await client.send_photo(chat_id, HOST_IMAGE_URL, caption=host_text)
+        except:
+            await client.send_message(chat_id, host_text)
+        
+        batter = game["current_batter"]
+        bowler = game["current_bowler"]
+        
+        await client.send_message(chat_id, f"🎯 Hey [{batter['name']}](tg://user?id={batter['id']}), now you're batter!")
+        await client.send_message(chat_id, f"🎯 Hey [{bowler['name']}](tg://user?id={bowler['id']}), now you're bowling!")
+        
+        await asyncio.sleep(1)
+        await send_bowling_video(client, chat_id, bowler)
+        
+        async def start_game_match(client, chat_id):
         print(f"🔴 ========== START GAME MATCH ==========")
         print(f"🔴 Chat ID: {chat_id}")
         
