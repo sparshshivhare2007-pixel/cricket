@@ -1221,6 +1221,10 @@ def register_handlers(app):
         await callback.message.delete()
         await callback.answer("❌ Captain selection cancelled!")
 
+    @app.on_callback_query(filters.regex("^noop$"))
+    async def noop_callback(client, callback):
+        await callback.answer()
+
     @app.on_callback_query(filters.regex("^toss_"))
     async def toss_callback(client, callback):
         chat_id = callback.message.chat.id
