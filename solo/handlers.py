@@ -879,7 +879,6 @@ def register_handlers(app):
             team_a_count = len(game.get("team_a", []))
             team_b_count = len(game.get("team_b", []))
             
-            # Get host name for clickable mention
             host = team_hosts.get(chat_id)
             if host:
                 host_mention = f"[{host['name']}](tg://user?id={host['id']})"
@@ -1073,6 +1072,32 @@ def register_handlers(app):
         game["team_b"].append(player_data)
         await message.reply(f"added {added_user.first_name} to Team B! ({len(game['team_b'])} players)")
 
+    # ================= START TOSS FUNCTION =================
+    async def start_toss(client, chat_id):
+        game = team_games.get(chat_id)
+        if not game:
+            return
+        
+        cap_a_name = game['captain_a']['name']
+        cap_b_name = game['captain_b']['name']
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🪙 HEADS", callback_data="toss_heads")],
+            [InlineKeyboardButton("🪙 TAILS", callback_data="toss_tails")]
+        ])
+        
+        await client.send_message(
+            chat_id,
+            f"🎉 **Captains Selected!** 🎉\n\n"
+            f"🏏 Team A Captain: {cap_a_name}\n"
+            f"🏏 Team B Captain: {cap_b_name}\n\n"
+            f"🪙 **TOSS TIME!** 🪙\n\n"
+            f"{cap_a_name}, choose Heads or Tails:",
+            reply_markup=keyboard
+        )
+        
+        game["status"] = "toss"
+
     # ================= CHOOSE CAPTAIN COMMAND =================
     @app.on_message(filters.command("choose_cap") & filters.group)
     async def choose_cap_cmd(client, message: Message):
@@ -1208,6 +1233,7 @@ def register_handlers(app):
     async def noop_callback(client, callback):
         await callback.answer()
 
+    # ================= TOSS CALLBACK =================
     @app.on_callback_query(filters.regex("^toss_"))
     async def toss_callback(client, callback):
         chat_id = callback.message.chat.id
@@ -1245,20 +1271,30 @@ def register_handlers(app):
         if choice == toss_result:
             winner_clickable = cap_a_clickable
             winner_team = "A"
-            
-            caption_text = f"🪙 The coin shows: {toss_result.upper()}!\n\n🅰️ - {cap_a_clickable} chose {choice.upper()}\n🅱️ {cap_b_clickable} got {toss_result.upper()}\n\n🏆 {winner_clickable} from Team {winner_team} won the toss!\n\n🏆 {winner_clickable}, please choose to Bat or Bowl:"
         else:
             winner_clickable = cap_b_clickable
             winner_team = "B"
-            
-            caption_text = f"🪙 The coin shows: {toss_result.upper()}!\n\n🅰️ - {cap_a_clickable} chose {choice.upper()}\n🅱️ {cap_b_clickable} got {toss_result.upper()}\n\n🏆 {winner_clickable} from Team {winner_team} won the toss!\n\n🏆 {winner_clickable}, please choose to Bat or Bowl:"
+        
+        # Complete caption with video
+        caption_text = f"🪙 The coin shows: {toss_result.upper()}!\n\n"
+        caption_text += f"🅰️ - {cap_a_clickable} chose {choice.upper()}\n"
+        caption_text += f"🅱️ {cap_b_clickable} got {toss_result.upper()}\n\n"
+        caption_text += f"🏆 {winner_clickable} from Team {winner_team} won the toss!\n\n"
+        caption_text += f"🏆 {winner_clickable}, please choose to Bat or Bowl:"
         
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🏏 BAT FIRST", callback_data="toss_bat")],
             [InlineKeyboardButton("⚾ BOWL FIRST", callback_data="toss_bowl")]
         ])
         
-        await client.send_video(chat_id, toss_video_url, caption=caption_text, reply_markup=keyboard)
+        # Send video with caption and buttons together
+        await client.send_video(
+            chat_id,
+            toss_video_url,
+            caption=caption_text,
+            reply_markup=keyboard
+        )
+        
         game["toss_winner"] = winner_team
 
     @app.on_callback_query(filters.regex("^toss_bat$|^toss_bowl$"))
