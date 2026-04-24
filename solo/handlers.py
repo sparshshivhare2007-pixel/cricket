@@ -905,7 +905,6 @@ def register_handlers(app):
             await message.reply("❌ You are the host! Host cannot join any team.")
             return
         
-        # CHECK: User already in Team B?
         for p in game.get("team_b", []):
             if p["id"] == user.id:
                 await message.reply("❌ You are already in Team B! You cannot join Team A.")
@@ -949,7 +948,6 @@ def register_handlers(app):
             await message.reply("❌ You are the host! Host cannot join any team.")
             return
         
-        # CHECK: User already in Team A?
         for p in game.get("team_a", []):
             if p["id"] == user.id:
                 await message.reply("❌ You are already in Team A! You cannot join Team B.")
@@ -1008,7 +1006,6 @@ def register_handlers(app):
             await message.reply("❌ Usage: /add_A @username or reply to a user's message")
             return
         
-        # CHECK: User already in Team B?
         for p in game.get("team_b", []):
             if p["id"] == added_user.id:
                 await message.reply(f"❌ {added_user.first_name} is already in Team B!")
@@ -1067,7 +1064,6 @@ def register_handlers(app):
             await message.reply("❌ Usage: /add_B @username or reply to a user's message")
             return
         
-        # CHECK: User already in Team A?
         for p in game.get("team_a", []):
             if p["id"] == added_user.id:
                 await message.reply(f"❌ {added_user.first_name} is already in Team A!")
@@ -1142,7 +1138,6 @@ def register_handlers(app):
             await message.reply("❌ Captains already selected!")
             return
         
-        # Sirf 2 inline buttons
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🏏 Choose Team A Captain 🏏", callback_data="choose_cap_a")],
             [InlineKeyboardButton("🏏 Choose Team B Captain 🏏", callback_data="choose_cap_b")],
@@ -1156,7 +1151,6 @@ def register_handlers(app):
             reply_markup=keyboard
         )
 
-    # ================= CHOOSE CAPTAIN A CALLBACK =================
     @app.on_callback_query(filters.regex("^choose_cap_a$"))
     async def choose_cap_a_callback(client, callback):
         chat_id = callback.message.chat.id
@@ -1171,7 +1165,6 @@ def register_handlers(app):
             await callback.answer("❌ Team A captain already selected!", show_alert=True)
             return
         
-        # Check if user is in Team A
         user_name = None
         for player in game["team_a"]:
             if player["id"] == user_id:
@@ -1185,7 +1178,6 @@ def register_handlers(app):
         
         await callback.answer(f"✅ {user_name} is now Team A Captain!")
         
-        # Check if both captains selected
         if game.get("captain_a") and game.get("captain_b"):
             await callback.message.delete()
             await start_toss(client, chat_id)
@@ -1202,7 +1194,6 @@ def register_handlers(app):
                 reply_markup=keyboard
             )
 
-    # ================= CHOOSE CAPTAIN B CALLBACK =================
     @app.on_callback_query(filters.regex("^choose_cap_b$"))
     async def choose_cap_b_callback(client, callback):
         chat_id = callback.message.chat.id
@@ -1217,7 +1208,6 @@ def register_handlers(app):
             await callback.answer("❌ Team B captain already selected!", show_alert=True)
             return
         
-        # Check if user is in Team B
         user_name = None
         for player in game["team_b"]:
             if player["id"] == user_id:
@@ -1231,7 +1221,6 @@ def register_handlers(app):
         
         await callback.answer(f"✅ {user_name} is now Team B Captain!")
         
-        # Check if both captains selected
         if game.get("captain_a") and game.get("captain_b"):
             await callback.message.delete()
             await start_toss(client, chat_id)
@@ -1253,9 +1242,178 @@ def register_handlers(app):
         await callback.message.delete()
         await callback.answer("❌ Captain selection cancelled!")
 
-    @app.on_callback_query(filters.regex("^noop$"))
-    async def noop_callback(client, callback):
-        await callback.answer()
+    # ================= TOSS CALLBACK =================
+    @app.on_callback_query(filters.regex("^toss_heads$|^toss_tails$"))
+    async def toss_callback(client, callback):
+        chat_id = callback.message.chat.id
+        user_id = callback.from_user.id
+        
+        game = team_games.get(chat_id)
+        if not game or game["status"] != "toss":
+            await callback.answer("❌ No toss in progress!", show_alert=True)
+            return
+        
+        if game["captain_a"]["id"] != user_id:
+            await callback.answer("❌ Only Team A captain can do the toss!", show_alert=True)
+            return
+        
+        choice = callback.data.split("_")[1]
+        toss_result = random.choice(["heads", "tails"])
+        
+        cap_a_id = game['captain_a']['id']
+        cap_a_name = game['captain_a']['name']
+        cap_a_username = game['captain_a'].get('username')
+        cap_a_display = f"@{cap_a_username}" if cap_a_username else cap_a_name
+        
+        cap_b_id = game['captain_b']['id']
+        cap_b_name = game['captain_b']['name']
+        cap_b_username = game['captain_b'].get('username')
+        cap_b_display = f"@{cap_b_username}" if cap_b_username else cap_b_name
+        
+        toss_video_url = TOSS_VIDEO
+        
+        await callback.message.delete()
+        
+        cap_a_clickable = f"[{cap_a_display}](tg://user?id={cap_a_id})"
+        cap_b_clickable = f"[{cap_b_display}](tg://user?id={cap_b_id})"
+        
+        if choice == toss_result:
+            winner_clickable = cap_a_clickable
+            winner_team = "A"
+        else:
+            winner_clickable = cap_b_clickable
+            winner_team = "B"
+        
+        caption_text = f"🪙 The coin shows: {toss_result.upper()}!\n\n"
+        caption_text += f"🅰️ - {cap_a_clickable} chose {choice.upper()}\n"
+        caption_text += f"🅱️ {cap_b_clickable} got {toss_result.upper()}\n\n"
+        caption_text += f"🏆 {winner_clickable} from Team {winner_team} won the toss!\n\n"
+        caption_text += f"🏆 {winner_clickable}, please choose to Bat or Bowl:"
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🏏 BAT FIRST", callback_data="toss_bat")],
+            [InlineKeyboardButton("⚾ BOWL FIRST", callback_data="toss_bowl")]
+        ])
+        
+        await client.send_video(
+            chat_id,
+            toss_video_url,
+            caption=caption_text,
+            reply_markup=keyboard
+        )
+        
+        game["toss_winner"] = winner_team
+
+    # ================= TOSS DECISION CALLBACK (FIXED) =================
+    @app.on_callback_query(filters.regex("^toss_bat$|^toss_bowl$"))
+    async def toss_decision_callback(client, callback):
+        chat_id = callback.message.chat.id
+        user_id = callback.from_user.id
+        
+        print(f"🔴 TOSS DECISION - Chat: {chat_id}, User: {user_id}, Data: {callback.data}")
+        
+        game = team_games.get(chat_id)
+        if not game:
+            await callback.answer("❌ No active game found!", show_alert=True)
+            return
+        
+        decision = callback.data.split("_")[1]  # "bat" or "bowl"
+        toss_winner = game.get("toss_winner")
+        
+        # Check permission
+        if toss_winner == "A" and game["captain_a"]["id"] != user_id:
+            await callback.answer("❌ Only Team A captain can decide!", show_alert=True)
+            return
+        elif toss_winner == "B" and game["captain_b"]["id"] != user_id:
+            await callback.answer("❌ Only Team B captain can decide!", show_alert=True)
+            return
+        
+        # Calculate batting team
+        if decision == "bat":
+            batting_team = toss_winner  # Toss winner bats first
+        else:  # bowl
+            batting_team = "B" if toss_winner == "A" else "A"  # Opposite team bats first
+        
+        game["toss_decision"] = decision
+        game["batting_first"] = batting_team
+        
+        await callback.message.delete()
+        
+        batting_team_name = "Team A" if batting_team == "A" else "Team B"
+        bowling_team_name = "Team B" if batting_team == "A" else "Team A"
+        
+        await client.send_message(
+            chat_id,
+            f"🏏 - {batting_team_name} chose to {'Batting' if decision == 'bat' else 'Bowling'} first.\n"
+            f"{bowling_team_name} will {'Bowling' if decision == 'bat' else 'Batting'}.\n\n"
+            f"🏏 Batting: {batting_team_name}\n"
+            f"🧤 Bowling: {bowling_team_name}"
+        )
+        
+        # Call select overs
+        await select_overs(client, chat_id, batting_team)
+
+    # ================= SELECT OVERS FUNCTION =================
+    async def select_overs(client, chat_id, batting_team):
+        game = team_games.get(chat_id)
+        if not game:
+            print(f"❌ select_overs: No game found for {chat_id}")
+            return
+        
+        print(f"✅ select_overs called for {chat_id}, batting_team={batting_team}")
+        
+        buttons = []
+        row = []
+        for i in range(1, 21):
+            row.append(InlineKeyboardButton(f"{i}", callback_data=f"over_{i}"))
+            if len(row) == 5:
+                buttons.append(row)
+                row = []
+        if row:
+            buttons.append(row)
+        
+        keyboard = InlineKeyboardMarkup(buttons)
+        
+        await client.send_message(
+            chat_id, 
+            f"📊 **Select number of overs:**\n\nChoose overs (1 to 20 overs per side):", 
+            reply_markup=keyboard
+        )
+        
+        game["status"] = "over_selection"
+        game["batting_first"] = batting_team
+        
+        print(f"✅ Over selection message sent, status set to over_selection")
+
+    # ================= OVER SELECTION CALLBACK =================
+    @app.on_callback_query(filters.regex("^over_"))
+    async def over_selection_callback(client, callback):
+        chat_id = callback.message.chat.id
+        print(f"🔴 OVER SELECTION - Chat: {chat_id}, Data: {callback.data}")
+        
+        game = team_games.get(chat_id)
+        if not game or game.get("status") != "over_selection":
+            await callback.answer("❌ No over selection in progress!", show_alert=True)
+            return
+        
+        overs = int(callback.data.split("_")[1])
+        game["overs"] = overs
+        game["total_balls_limit"] = overs * 6
+        
+        await callback.message.delete()
+        
+        batting_team = game["batting_first"]
+        team_name = "Team A" if batting_team == "A" else "Team B"
+        
+        await client.send_message(
+            chat_id, 
+            f"✅ Match set! {overs} overs per side.\n\n🚀 Match is starting...\n🏏 {team_name} will bat first!\n\nLet the game begin! 🎉"
+        )
+        
+        game["match_start_time"] = datetime.now()
+        game["status"] = "playing"
+        
+        await start_team_batting(client, chat_id, batting_team)
 
     # ================= MEMBER LISTS COMMAND =================
     @app.on_message(filters.command("member_lists") & filters.group)
@@ -1300,7 +1458,6 @@ def register_handlers(app):
                 await message.reply(f"❌ Error: {e}")
             return
         
-        # Team mode active
         if team_game:
             host_name = "Unknown"
             if host:
@@ -1356,7 +1513,6 @@ def register_handlers(app):
             
             await message.reply(text)
         
-        # Solo mode active
         elif solo_game:
             host_name = "Unknown"
             if solo_game.get("host_id"):
@@ -1387,150 +1543,7 @@ def register_handlers(app):
             
             await message.reply(text)
 
-    # ================= TOSS CALLBACK =================
-    @app.on_callback_query(filters.regex("^toss_"))
-    async def toss_callback(client, callback):
-        chat_id = callback.message.chat.id
-        user_id = callback.from_user.id
-        
-        game = team_games.get(chat_id)
-        if not game or game["status"] != "toss":
-            await callback.answer("❌ No toss in progress!", show_alert=True)
-            return
-        
-        if game["captain_a"]["id"] != user_id:
-            await callback.answer("❌ Only Team A captain can do the toss!", show_alert=True)
-            return
-        
-        choice = callback.data.split("_")[1]
-        toss_result = random.choice(["heads", "tails"])
-        
-        cap_a_id = game['captain_a']['id']
-        cap_a_name = game['captain_a']['name']
-        cap_a_username = game['captain_a'].get('username')
-        cap_a_display = f"@{cap_a_username}" if cap_a_username else cap_a_name
-        
-        cap_b_id = game['captain_b']['id']
-        cap_b_name = game['captain_b']['name']
-        cap_b_username = game['captain_b'].get('username')
-        cap_b_display = f"@{cap_b_username}" if cap_b_username else cap_b_name
-        
-        toss_video_url = TOSS_VIDEO
-        
-        await callback.message.delete()
-        
-        cap_a_clickable = f"[{cap_a_display}](tg://user?id={cap_a_id})"
-        cap_b_clickable = f"[{cap_b_display}](tg://user?id={cap_b_id})"
-        
-        if choice == toss_result:
-            winner_clickable = cap_a_clickable
-            winner_team = "A"
-        else:
-            winner_clickable = cap_b_clickable
-            winner_team = "B"
-        
-        # Complete caption with video
-        caption_text = f"🪙 The coin shows: {toss_result.upper()}!\n\n"
-        caption_text += f"🅰️ - {cap_a_clickable} chose {choice.upper()}\n"
-        caption_text += f"🅱️ {cap_b_clickable} got {toss_result.upper()}\n\n"
-        caption_text += f"🏆 {winner_clickable} from Team {winner_team} won the toss!\n\n"
-        caption_text += f"🏆 {winner_clickable}, please choose to Bat or Bowl:"
-        
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🏏 BAT FIRST", callback_data="toss_bat")],
-            [InlineKeyboardButton("⚾ BOWL FIRST", callback_data="toss_bowl")]
-        ])
-        
-        await client.send_video(
-            chat_id,
-            toss_video_url,
-            caption=caption_text,
-            reply_markup=keyboard
-        )
-        
-        game["toss_winner"] = winner_team
-
-    @app.on_callback_query(filters.regex("^toss_bat$|^toss_bowl$"))
-    async def toss_decision_callback(client, callback):
-        chat_id = callback.message.chat.id
-        user_id = callback.from_user.id
-        
-        game = team_games.get(chat_id)
-        if not game:
-            await callback.answer("❌ No active game found!", show_alert=True)
-            return
-        
-        decision = callback.data.split("_")[1]
-        toss_winner = game.get("toss_winner")
-        
-        if toss_winner == "A" and game["captain_a"]["id"] != user_id:
-            await callback.answer("❌ Only Team A captain can decide!", show_alert=True)
-            return
-        elif toss_winner == "B" and game["captain_b"]["id"] != user_id:
-            await callback.answer("❌ Only Team B captain can decide!", show_alert=True)
-            return
-        
-        game["toss_decision"] = decision
-        
-        if decision == "bat":
-            batting_team = toss_winner
-        else:
-            batting_team = "A" if toss_winner == "B" else "B"
-        
-        await callback.message.delete()
-        
-        team_name = "Team A" if batting_team == "A" else "Team B"
-        await client.send_message(chat_id, f"🏏 - {team_name} chose to {'Batting' if decision == 'bat' else 'Bowling'} first.\nTeam {'B' if batting_team == 'A' else 'A'} will {'Bowling' if decision == 'bat' else 'Batting'}.\n\n🏏 Batting: Team {batting_team}\n🧤 Bowling: Team {'B' if batting_team == 'A' else 'A'}")
-        
-        await select_overs(client, chat_id, batting_team)
-
-    async def select_overs(client, chat_id, batting_team):
-        game = team_games.get(chat_id)
-        if not game:
-            return
-        
-        buttons = []
-        row = []
-        for i in range(1, 21):
-            row.append(InlineKeyboardButton(f"{i}", callback_data=f"over_{i}"))
-            if len(row) == 5:
-                buttons.append(row)
-                row = []
-        if row:
-            buttons.append(row)
-        
-        keyboard = InlineKeyboardMarkup(buttons)
-        
-        await client.send_message(chat_id, f"📊 **Select number of overs:**\n\nChoose overs (1 to 20 overs per side):", reply_markup=keyboard)
-        
-        game["status"] = "over_selection"
-        game["batting_first"] = batting_team
-
-    @app.on_callback_query(filters.regex("^over_"))
-    async def over_selection_callback(client, callback):
-        chat_id = callback.message.chat.id
-        
-        game = team_games.get(chat_id)
-        if not game or game["status"] != "over_selection":
-            await callback.answer("❌ No over selection in progress!", show_alert=True)
-            return
-        
-        overs = int(callback.data.split("_")[1])
-        game["overs"] = overs
-        game["total_balls_limit"] = overs * 6
-        
-        await callback.message.delete()
-        
-        batting_team = game["batting_first"]
-        team_name = "Team A" if batting_team == "A" else "Team B"
-        
-        await client.send_message(chat_id, f"✅ Match set! {overs} overs per side.\n\n🚀 Match is starting...\n🏏 {team_name} will bat first!\n\nLet the game begin! 🎉")
-        
-        game["match_start_time"] = datetime.now()
-        game["status"] = "playing"
-        
-        await start_team_batting(client, chat_id, batting_team)
-
+    # ================= START TEAM BATTING =================
     async def start_team_batting(client, chat_id, team):
         print(f"🔴 START_TEAM_BATTING - Chat: {chat_id}, Team: {team}")
         game = team_games.get(chat_id)
@@ -1672,7 +1685,6 @@ def register_handlers(app):
             active_batters = [p for p in team_game[team_key] if not p.get("out", False)]
             
             if not active_batters or team_game["team_wickets"] >= len(team_game[team_key]):
-                # Innings over logic...
                 if team_game["current_team"] == "A":
                     team_game["team_a_score"] = team_game["team_total"]
                     team_game["team_a_wickets"] = team_game["team_wickets"]
@@ -1700,7 +1712,6 @@ def register_handlers(app):
                         del team_hosts[chat_id]
                 return
             
-            # Find next batter...
             next_batter_index = team_game["current_batter_index"] + 1
             for i in range(next_batter_index, len(team_game[team_key])):
                 if not team_game[team_key][i].get("out", False):
