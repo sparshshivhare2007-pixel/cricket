@@ -648,11 +648,7 @@ def register_handlers(app):
         
         await message.reply(f"🎉 {user.first_name}, you've joined the solo game! (Player {players_count}) 👍")
         
-        # Auto start when 2 players join
-        if players_count >= 2:
-            await client.send_message(chat_id, f"✅ {players_count} players joined! Starting game...")
-            await asyncio.sleep(2)
-            await start_game_match(client, chat_id)
+        # Timer will handle starting the game (2 minutes wait)
 
     async def start_game_match(client, chat_id):
         print(f"🔴 START GAME MATCH - Chat: {chat_id}")
@@ -825,8 +821,6 @@ def register_handlers(app):
             "status": "waiting_host",
             "team_a": [],
             "team_b": [],
-            "captain_a": None,
-            "captain_b": None,
             "team_a_score": 0,
             "team_b_score": 0,
             "team_a_wickets": 0,
@@ -1069,6 +1063,104 @@ def register_handlers(app):
         
         game["team_b"].append(player_data)
         await message.reply(f"added {added_user.first_name} to Team B! ({len(game['team_b'])} players)")
+
+    # ================= BOWLING DM =================
+    @app.on_message(filters.private & filters.text)
+    async def bowling_dm(client, message):
+        user_id = message.from_user.id
+        text = message.text.strip()
+        
+        print(f"🔴 BOWLING DM RECEIVED - User: {user_id}, Text: {text}")
+        
+        if text.startswith("/start"):
+            print(f"🔴 User sent /start, ignoring")
+            return
+        
+        if not text.isdigit() or int(text) not in range(1, 7):
+            print(f"🔴 Invalid number: {text}")
+            return await message.reply(INVALID_NUMBER)
+        
+        num = int(text)
+        print(f"🔴 Valid bowling number: {num}")
+        
+        found = False
+        
+        # Solo mode
+        for chat_id, game in games.items():
+            if game.get("status") != "playing" or game.get("game_over"):
+                continue
+            
+            current_bowler = game.get("current_bowler", {})
+            print(f"🔴 Checking solo game {chat_id} - Bowler ID: {current_bowler.get('id')}, User ID: {user_id}")
+            
+            if current_bowler.get("id") != user_id:
+                continue
+            
+            if game.get("bowling_number") is not None:
+                await message.reply("❌ You already bowled! Wait for your next turn.")
+                return
+            
+            if chat_id in bowling_tasks:
+                try:
+                    bowling_tasks[chat_id].cancel()
+                except:
+                    pass
+                del bowling_tasks[chat_id]
+            
+            set_bowling(chat_id, num)
+            await message.reply(f"✅ Bowling number {num} sent to game!")
+            
+            batter = game["current_batter"]
+            batter_clickable = f"[{batter['name']}](tg://user?id={batter['id']})"
+            
+            await client.send_video(
+                chat_id, 
+                BATTING_VIDEO, 
+                caption=f"Hey {batter_clickable}, now you're batting! Send number (1-6) in GROUP"
+            )
+            print(f"🔴 Bowling number {num} set for solo game {chat_id}")
+            found = True
+            return
+        
+        # Team mode
+        for chat_id, game in team_games.items():
+            if game.get("status") != "playing" or game.get("game_over"):
+                continue
+            
+            current_bowler = game.get("current_bowler", {})
+            print(f"🔴 Checking team game {chat_id} - Bowler ID: {current_bowler.get('id')}, User ID: {user_id}")
+            
+            if current_bowler.get("id") != user_id:
+                continue
+            
+            if game.get("bowling_number") is not None:
+                await message.reply("❌ You already bowled! Wait for your next turn.")
+                return
+            
+            if chat_id in bowling_tasks:
+                try:
+                    bowling_tasks[chat_id].cancel()
+                except:
+                    pass
+                del bowling_tasks[chat_id]
+            
+            game["bowling_number"] = num
+            await message.reply(f"✅ Bowling number {num} sent to game!")
+            
+            batter = game["current_batter"]
+            batter_clickable = f"[{batter['name']}](tg://user?id={batter['id']})"
+            
+            await client.send_message(
+                chat_id, 
+                f"🎯 Bowler bowled {num}! Now {batter_clickable}, send your batting number (1-6) in GROUP"
+            )
+            print(f"🔴 Bowling number {num} set for team game {chat_id}")
+            found = True
+            return
+        
+        if not found:
+            print(f"🔴 No active game found for user {user_id}")
+            await message.reply("❌ No active game found where you are the bowler!")
 
     # ================= VOTE SYSTEM =================
     async def vote_system(client, message):
