@@ -1333,21 +1333,34 @@ def register_handlers(app):
 
     async def send_bowling_video_team(client, chat_id, bowler):
         game = team_games.get(chat_id)
-        if not game or game.get("status") != "playing":
+        if not game or game.get("status") != "playing" or game.get("game_over"):
             return
+        
+        batter = game["current_batter"]
+        bot_username = BOT_USERNAME
+        dm_link = f"https://t.me/{bot_username}"
+        
+        # INLINE BUTTON - Click to Bowl
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎯 Click to Bowl", url=dm_link)]
+        ])
         
         bowler_clickable = f"[{bowler['name']}](tg://user?id={bowler['id']})"
         
         await client.send_video(
-            chat_id,
+            chat_id, 
             BOWLING_VIDEO,
-            caption=f"{bowler_clickable} now you can send a number in the bot PM. You have 1 min."
+            caption=f"{bowler_clickable} now you can send number on bot pm, You have 1 min.",
+            reply_markup=keyboard
         )
+        
+        batter_clickable = f"[{batter['name']}](tg://user?id={batter['id']})"
         
         try:
             await client.send_message(
                 bowler["id"],
-                f"🎯 Send bowling number (1-6):\n\n⏰ You have 60 seconds!"
+                f"🎯 Current batter: {batter_clickable}\n\nSend Your number (1-6):",
+                disable_web_page_preview=True
             )
         except:
             pass
@@ -1358,16 +1371,77 @@ def register_handlers(app):
             except:
                 pass
         
-        task = asyncio.create_task(bowling_timeout_team(client, chat_id, bowler["id"], bowler["name"]))
+        task = asyncio.create_task(bowling_timeout_with_warnings_team(client, chat_id, bowler["id"], bowler["name"], None))
         bowling_tasks[chat_id] = task
 
-    async def bowling_timeout_team(client, chat_id, user_id, bowler_name):
-        await asyncio.sleep(60)
+    async def bowling_timeout_with_warnings_team(client, chat_id, user_id, bowler_name, message_id):
+        await asyncio.sleep(30)
         game = team_games.get(chat_id)
         if game and game.get("status") == "playing":
             current_bowler = game.get("current_bowler", {})
             if current_bowler.get("id") == user_id and game.get("bowling_number") is None:
-                await client.send_message(chat_id, f"⚠️ No response from {bowler_name}! Host use /swap to change innings.")
+                try:
+                    await client.send_message(
+                        chat_id,
+                        f"⚠️ Warning: [{bowler_name}](tg://user?id={user_id}), you have 30 seconds left to send a number!"
+                    )
+                except:
+                    pass
+        
+        await asyncio.sleep(20)
+        game = team_games.get(chat_id)
+        if game and game.get("status") == "playing":
+            current_bowler = game.get("current_bowler", {})
+            if current_bowler.get("id") == user_id and game.get("bowling_number") is None:
+                try:
+                    await client.send_message(
+                        chat_id,
+                        f"⚠️ Warning: [{bowler_name}](tg://user?id={user_id}), you have 10 seconds left to send a number!"
+                    )
+                except:
+                    pass
+        
+        await asyncio.sleep(10)
+        game = team_games.get(chat_id)
+        if game and game.get("status") == "playing":
+            current_bowler = game.get("current_bowler", {})
+            if current_bowler.get("id") == user_id and game.get("bowling_number") is None:
+                
+                team_key = f"team_{game['current_team'].lower()}"
+                for player in game[team_key]:
+                    if player["id"] == user_id:
+                        player["score"] -= 6
+                        player["history"].append("-6")
+                        break
+                
+                game["team_total"] = sum(p["score"] for p in game[team_key])
+                
+                try:
+                    await client.send_video(
+                        chat_id,
+                        get_run_video(6),
+                        caption=f"No message received from bowler, deducting 6 runs from {game['current_team']} team."
+                    )
+                except:
+                    await client.send_message(
+                        chat_id,
+                        f"No message received from bowler, deducting 6 runs from {game['current_team']} team."
+                    )
+                
+                await client.send_message(chat_id, build_team_scoreboard(game))
+                
+                game["bowling_number"] = None
+                game["current_bowler_balls"] += 1
+                game["total_balls_in_inning"] += 1
+                
+                if game["current_bowler_balls"] >= 6:
+                    players = game[team_key]
+                    new_bowler_index = (game["current_bowler_index"] + 1) % len(players)
+                    game["current_bowler_index"] = new_bowler_index
+                    game["current_bowler"] = players[new_bowler_index].copy()
+                    game["current_bowler_balls"] = 0
+                
+                await send_bowling_video_team(client, chat_id, game["current_bowler"])
         
         if chat_id in bowling_tasks:
             del bowling_tasks[chat_id]
@@ -1428,7 +1502,7 @@ def register_handlers(app):
                 await send_batting_video_team(client, chat_id, batter, num)
                 return
         
-        # Check for batting
+        # Check for batting - TEAM MODE
         for chat_id, game in team_games.items():
             if game.get("status") != "playing":
                 continue
@@ -1466,7 +1540,6 @@ def register_handlers(app):
         
         await client.send_message(chat_id, f"❌ **OUT!** {batter['name']} is out!")
         
-        # Check if all players are out
         active_batters = [p for p in game[team_key] if not p.get("out", False)]
         
         if len(active_batters) == 0 or game["team_wickets"] >= len(game[team_key]):
@@ -1623,7 +1696,6 @@ def register_handlers(app):
         
         winner_name = "Team A" if winner == "A" else "Team B" if winner == "B" else "Match Tied"
         
-        # Build final scoreboard
         final_text = f"🏆 **Team {winner_name} wins this game!** 🎉\n\n"
         final_text += f"🏆 Game Results 🏆\n"
         final_text += f"Winner: {winner_name}\n\n"
@@ -1855,7 +1927,7 @@ def register_handlers(app):
         await client.send_message(chat_id, f"🏏 **Team {team} Batting**\n\nBatter: {batter_clickable}\nBowler: {bowler_clickable}")
         await send_bowling_video_team(client, chat_id, game["current_bowler"])
 
-    # ================= BATTING (group message) - Solo mode only =================
+    # ================= BATTING (group message) - BOTH Solo AND Team mode =================
     @app.on_message(filters.group & filters.text & ~filters.bot)
     async def batting_msg(client, message: Message):
         text = message.text.strip()
@@ -1864,9 +1936,50 @@ def register_handlers(app):
             return
         
         chat_id = message.chat.id
-        print(f"🔴 BATTING MSG - Chat: {chat_id}, Text: {text}")
+        user_id = message.from_user.id
+        print(f"🔴 BATTING MSG - Chat: {chat_id}, User: {user_id}, Text: {text}")
         
-        # Solo mode only (team mode handles via DM)
+        # ================= TEAM MODE =================
+        team_game = team_games.get(chat_id)
+        if team_game:
+            # Check if game is in playing state
+            if team_game.get("status") != "playing" or team_game.get("game_over"):
+                return
+            
+            # Check if bowling number is sent
+            if team_game.get("bowling_number") is None:
+                await message.reply("⏳ Wait for bowler to bowl first!")
+                return
+            
+            # Check if current batter is the one who sent message
+            batter = team_game.get("current_batter")
+            if not batter or batter.get("id") != user_id:
+                await message.reply("❌ You are not the current batter!")
+                return
+            
+            # Validate number
+            if not text.isdigit() or int(text) not in range(1, 7):
+                return await message.reply("❌ Send number 1-6 only!")
+            
+            try:
+                await message.reply("👍")
+            except:
+                pass
+            
+            bat = int(text)
+            bow = team_game.get("bowling_number")
+            team_game["bowling_number"] = None
+            bowler = team_game["current_bowler"]
+            
+            if bat == bow:
+                # OUT
+                await process_out_team(client, chat_id, batter)
+            else:
+                # Runs scored
+                await process_runs_team(client, chat_id, batter, bat)
+            return
+        
+        # ================= SOLO MODE =================
         game = games.get(chat_id)
         if game:
             if game.get("status") != "playing" or game.get("game_over") or game.get("bowling_number") is None:
