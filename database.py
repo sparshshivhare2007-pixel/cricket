@@ -3,8 +3,9 @@ from datetime import datetime
 import os
 from bson import ObjectId
 
-# MongoDB connection
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+# MongoDB connection - FIXED for localhost
+# Change from mongodb://localhost:27017 to 127.0.0.1
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://127.0.0.1:27017")
 DB_NAME = "cricket_bot"
 
 # Collections
@@ -30,26 +31,41 @@ async def init_db():
     """Initialize database connection and collections"""
     global client, db, users, matches, solo_games, team_games, reports
     
-    client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
-    db = client[DB_NAME]
-    
-    users = db[USERS_COLLECTION]
-    matches = db[MATCHES_COLLECTION]
-    solo_games = db[SOLO_GAMES_COLLECTION]
-    team_games = db[TEAM_GAMES_COLLECTION]
-    reports = db[REPORTS_COLLECTION]
-    
-    # Create indexes
-    await users.create_index("user_id", unique=True)
-    await users.create_index("username")
-    await matches.create_index("chat_id")
-    await matches.create_index("match_id")
-    await solo_games.create_index("chat_id")
-    await team_games.create_index("chat_id")
-    await reports.create_index("reported_user_id")
-    
-    print("✅ MongoDB connected and indexes created!")
-    return True
+    try:
+        # Add serverSelectionTimeoutMS to avoid long waiting
+        client = motor.motor_asyncio.AsyncIOMotorClient(
+            MONGO_URI, 
+            serverSelectionTimeoutMS=5000  # 5 second timeout
+        )
+        
+        # Check connection
+        await client.admin.command('ping')
+        print("✅ MongoDB ping successful!")
+        
+        db = client[DB_NAME]
+        
+        users = db[USERS_COLLECTION]
+        matches = db[MATCHES_COLLECTION]
+        solo_games = db[SOLO_GAMES_COLLECTION]
+        team_games = db[TEAM_GAMES_COLLECTION]
+        reports = db[REPORTS_COLLECTION]
+        
+        # Create indexes
+        await users.create_index("user_id", unique=True)
+        await users.create_index("username")
+        await matches.create_index("chat_id")
+        await matches.create_index("match_id")
+        await solo_games.create_index("chat_id")
+        await team_games.create_index("chat_id")
+        await reports.create_index("reported_user_id")
+        
+        print("✅ MongoDB connected and indexes created!")
+        return True
+        
+    except Exception as e:
+        print(f"❌ MongoDB connection failed: {e}")
+        print("⚠️ Bot will run WITHOUT database. Stats will not be saved.")
+        return False
 
 
 async def close_db():
@@ -64,11 +80,38 @@ async def close_db():
 
 async def get_user(user_id):
     """Get user by ID"""
+    if users is None:
+        return None
     return await users.find_one({"user_id": user_id})
 
 
 async def get_or_create_user(user_id, name, username=None):
     """Get user or create if not exists"""
+    if users is None:
+        # Return dummy data if DB not connected
+        return {
+            "user_id": user_id,
+            "name": name,
+            "username": username,
+            "highest_score": 0,
+            "highest_score_balls": 0,
+            "best_game_host": 0,
+            "total_runs": 0,
+            "total_balls": 0,
+            "wickets": 0,
+            "sixes": 0,
+            "fours": 0,
+            "centuries": 0,
+            "fifties": 0,
+            "ducks": 0,
+            "hat_tricks": 0,
+            "man_of_match": 0,
+            "best_captain": 0,
+            "matches_played": 0,
+            "runs_conceded": 0,
+            "overs_bowled": 0
+        }
+    
     user = await get_user(user_id)
     if not user:
         user_data = {
@@ -102,6 +145,8 @@ async def get_or_create_user(user_id, name, username=None):
 
 async def update_user_stats(user_id, stats_data):
     """Update user stats"""
+    if users is None:
+        return
     await users.update_one(
         {"user_id": user_id},
         {
@@ -113,6 +158,8 @@ async def update_user_stats(user_id, stats_data):
 
 async def update_user_highest_score(user_id, score, balls):
     """Update highest score if current score is higher"""
+    if users is None:
+        return False
     user = await get_user(user_id)
     if user and score > user.get("highest_score", 0):
         await users.update_one(
@@ -130,6 +177,8 @@ async def update_user_highest_score(user_id, score, balls):
 
 async def increment_best_game_host(user_id):
     """Increment best game host count"""
+    if users is None:
+        return
     await users.update_one(
         {"user_id": user_id},
         {"$inc": {"best_game_host": 1}}
@@ -138,6 +187,8 @@ async def increment_best_game_host(user_id):
 
 async def increment_hat_trick(user_id):
     """Increment hat-trick count"""
+    if users is None:
+        return
     await users.update_one(
         {"user_id": user_id},
         {"$inc": {"hat_tricks": 1}}
@@ -149,6 +200,8 @@ async def update_match_stats(user_id, runs_scored=0, balls_played=0, wickets_tak
                              is_century=False, runs_conceded=0, overs_bowled=0,
                              is_man_of_match=False, is_best_captain=False):
     """Update stats after a match"""
+    if users is None:
+        return
     
     stats_data = {
         "matches_played": 1,
@@ -184,7 +237,6 @@ async def get_all_users_stats():
         return []
     users_list = []
     async for doc in users.find({}):
-        # Create a copy without _id for easier handling
         user_data = {k: v for k, v in doc.items() if k != '_id'}
         users_list.append(user_data)
     return users_list
@@ -194,6 +246,8 @@ async def get_all_users_stats():
 
 async def save_solo_game(chat_id, game_data):
     """Save completed solo game to database"""
+    if solo_games is None:
+        return None
     game_record = {
         "chat_id": chat_id,
         "players": game_data.get("players", []),
@@ -208,8 +262,13 @@ async def save_solo_game(chat_id, game_data):
     return game_record
 
 
+# Continue with other functions (they already have checks)...
+
+
 async def get_solo_games(chat_id, limit=10):
     """Get recent solo games for a chat"""
+    if solo_games is None:
+        return []
     cursor = solo_games.find({"chat_id": chat_id}).sort("end_time", -1).limit(limit)
     return await cursor.to_list(length=limit)
 
@@ -218,6 +277,8 @@ async def get_solo_games(chat_id, limit=10):
 
 async def save_team_game(chat_id, game_data):
     """Save completed team game to database"""
+    if team_games is None:
+        return None
     game_record = {
         "chat_id": chat_id,
         "team_a": game_data.get("team_a", []),
@@ -240,6 +301,8 @@ async def save_team_game(chat_id, game_data):
 
 async def get_team_games(chat_id, limit=10):
     """Get recent team games for a chat"""
+    if team_games is None:
+        return []
     cursor = team_games.find({"chat_id": chat_id}).sort("end_time", -1).limit(limit)
     return await cursor.to_list(length=limit)
 
@@ -248,9 +311,11 @@ async def get_team_games(chat_id, limit=10):
 
 async def save_match(chat_id, match_data):
     """Save any match (solo or team) to database"""
+    if matches is None:
+        return None
     match_record = {
         "chat_id": chat_id,
-        "match_type": match_data.get("type"),  # "solo" or "team"
+        "match_type": match_data.get("type"),
         "data": match_data,
         "created_at": datetime.now()
     }
@@ -260,6 +325,8 @@ async def save_match(chat_id, match_data):
 
 async def get_match_history(chat_id, limit=20):
     """Get match history for a chat"""
+    if matches is None:
+        return []
     cursor = matches.find({"chat_id": chat_id}).sort("created_at", -1).limit(limit)
     return await cursor.to_list(length=limit)
 
@@ -268,6 +335,8 @@ async def get_match_history(chat_id, limit=20):
 
 async def save_report(chat_id, reported_user_id, reporter_id, reason):
     """Save a user report"""
+    if reports is None:
+        return None
     report_data = {
         "chat_id": chat_id,
         "reported_user_id": reported_user_id,
@@ -282,12 +351,16 @@ async def save_report(chat_id, reported_user_id, reporter_id, reason):
 
 async def get_user_reports(reported_user_id, limit=10):
     """Get reports for a user"""
+    if reports is None:
+        return []
     cursor = reports.find({"reported_user_id": reported_user_id}).sort("created_at", -1).limit(limit)
     return await cursor.to_list(length=limit)
 
 
 async def get_all_reports(chat_id, limit=50):
     """Get all reports for a chat"""
+    if reports is None:
+        return []
     cursor = reports.find({"chat_id": chat_id}).sort("created_at", -1).limit(limit)
     return await cursor.to_list(length=limit)
 
@@ -296,18 +369,24 @@ async def get_all_reports(chat_id, limit=50):
 
 async def get_top_batters(limit=10):
     """Get top batters by runs"""
+    if users is None:
+        return []
     cursor = users.find().sort("total_runs", -1).limit(limit)
     return await cursor.to_list(length=limit)
 
 
 async def get_top_bowlers(limit=10):
     """Get top bowlers by wickets"""
+    if users is None:
+        return []
     cursor = users.find().sort("wickets", -1).limit(limit)
     return await cursor.to_list(length=limit)
 
 
 async def get_top_all_rounders(limit=10):
     """Get top all-rounders by (runs + wickets*20)"""
+    if users is None:
+        return []
     pipeline = [
         {"$addFields": {
             "all_round_score": {"$add": ["$total_runs", {"$multiply": ["$wickets", 20]}]}
@@ -321,6 +400,8 @@ async def get_top_all_rounders(limit=10):
 
 async def get_user_rank(user_id, stat_field="total_runs"):
     """Get user rank based on a statistic"""
+    if users is None:
+        return None
     users_list = await users.find().sort(stat_field, -1).to_list(length=None)
     for i, user in enumerate(users_list, 1):
         if user["user_id"] == user_id:
@@ -332,23 +413,36 @@ async def get_user_rank(user_id, stat_field="total_runs"):
 
 async def get_all_users(limit=100):
     """Get all users"""
+    if users is None:
+        return []
     cursor = users.find().limit(limit)
     return await cursor.to_list(length=limit)
 
 
 async def delete_user(user_id):
     """Delete a user (admin only)"""
+    if users is None:
+        return False
     result = await users.delete_one({"user_id": user_id})
     return result.deleted_count > 0
 
 
 async def get_stats_summary():
     """Get overall bot statistics"""
+    if users is None:
+        return {
+            "total_users": 0,
+            "total_matches": 0,
+            "total_solo_games": 0,
+            "total_team_games": 0,
+            "total_reports": 0
+        }
+    
     total_users = await users.count_documents({})
-    total_matches = await matches.count_documents({})
-    total_solo_games = await solo_games.count_documents({})
-    total_team_games = await team_games.count_documents({})
-    total_reports = await reports.count_documents({})
+    total_matches = await matches.count_documents({}) if matches else 0
+    total_solo_games = await solo_games.count_documents({}) if solo_games else 0
+    total_team_games = await team_games.count_documents({}) if team_games else 0
+    total_reports = await reports.count_documents({}) if reports else 0
     
     return {
         "total_users": total_users,
