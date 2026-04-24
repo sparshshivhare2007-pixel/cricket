@@ -343,7 +343,8 @@ def register_handlers(app):
 🏏 **Enjoy the game!** 🏏"""
         
         await message.reply(help_text)
-          
+        
+    # ================= USER INFO COMMAND =================
     @app.on_message(filters.command("user_info") & filters.group)
     async def user_info_cmd(client, message: Message):
         from pyrogram.enums import ParseMode
@@ -358,69 +359,57 @@ def register_handlers(app):
         
         highest_score = user_data.get("highest_score", 0)
         highest_score_balls = user_data.get("highest_score_balls", 0)
-        best_game_host = user_data.get("best_game_host", 0)
         total_runs = user_data.get("total_runs", 0)
         total_balls = user_data.get("total_balls", 0)
         wickets = user_data.get("wickets", 0)
-        sixes = user_data.get("sixes", 0)
-        fours = user_data.get("fours", 0)
         centuries = user_data.get("centuries", 0)
         fifties = user_data.get("fifties", 0)
-        ducks = user_data.get("ducks", 0)
-        hat_tricks = user_data.get("hat_tricks", 0)
-        man_of_match = user_data.get("man_of_match", 0)
-        best_captain = user_data.get("best_captain", 0)
         matches_played = user_data.get("matches_played", 0)
-        runs_conceded = user_data.get("runs_conceded", 0)
-        overs_bowled = user_data.get("overs_bowled", 0)
         
+        # Calculate strike rate
         strike_rate = round((total_runs / total_balls) * 100, 2) if total_balls > 0 else 0.0
-        economy_rate = round((runs_conceded / overs_bowled), 2) if overs_bowled > 0 else 0.0
         
+        # Create clickable user mention
         if username:
             user_mention = f'<a href="tg://user?id={user_id}">@{username}</a>'
         else:
             user_mention = f'<a href="tg://user?id={user_id}">{name}</a>'
         
+        # Prepare stats text (removed: Date, Best Game Host, Sixes, Fours, Ducks, Man of Match, Best Captain)
         stats_text = f"""🏏 Stats Summary
 👤 User: {user_mention}
 🆔 User ID: {user_id}
-📅 Date: {datetime.now().strftime('%Y-%m-%d')}
 ─────⊱◈◈◈⊰─────
-🏆 Highest Score: {highest_score}({highest_score_balls} Balls)
-🎮 Best Game Host: {best_game_host}
+🏆 Highest Score: {highest_score} ({highest_score_balls} Balls)
 📊 Runs: {total_runs} ({matches_played})
 🎯 Wickets: {wickets}
-💥 Sixes: {sixes}
-✨ Fours: {fours}
 🔥 Centuries: {centuries}
 ⭐ Fifties: {fifties}
-🦆 Ducks: {ducks}
-🎩 Hat-Tricks: {hat_tricks}
 ⚡ Strike Rate: {strike_rate}
-🎯 Economy Rate: {economy_rate}
-─────⊱◈◈◈⊰─────
-🏅 Man of the Match: {man_of_match}
-
- ╰⊚(🏏:{wickets}) + (⚾:{sixes})
-
-─────⊱◈◈◈⊰─────
-🧢 Best captain: {best_captain} (🏆: N/A)
- ╰⊚(🏆: {man_of_match}) + (😞:{ducks})"""
+─────⊱◈◈◈⊰─────"""
         
         try:
-            await client.send_photo(
-                message.chat.id,
-                USER_STATS_IMAGE,
-                caption=stats_text,
-                has_spoiler=True,
-                parse_mode=ParseMode.HTML
-            )
+            if USER_STATS_IMAGE.startswith(('http://', 'https://')):
+                await client.send_photo(
+                    message.chat.id,
+                    USER_STATS_IMAGE,
+                    caption=stats_text,
+                    has_spoiler=True,
+                    parse_mode=ParseMode.HTML
+                )
+            else:
+                await client.send_photo(
+                    message.chat.id,
+                    USER_STATS_IMAGE,
+                    caption=stats_text,
+                    has_spoiler=True,
+                    parse_mode=ParseMode.HTML
+                )
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Error sending image: {e}")
             await message.reply(stats_text.replace(user_mention, f"@{username}" if username else name))
-
-    @app.on_message(filters.command("user_ranks") & filters.group)
+            
+            @app.on_message(filters.command("user_ranks") & filters.group)
     async def user_ranks_cmd(client, message: Message):
         from pyrogram.enums import ParseMode
         from database import get_or_create_user
