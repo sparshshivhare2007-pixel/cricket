@@ -273,6 +273,7 @@ def build_team_scoreboard(game):
 
 def register_handlers(app):
 
+    # ================= START COMMAND =================
     @app.on_message(filters.command("start") & filters.group)
     async def start_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -282,6 +283,26 @@ def register_handlers(app):
             await select_game_menu(client, message)
         else:
             await vote_system(client, message)
+
+    @app.on_message(filters.command("start") & filters.private)
+    async def start_dm(client, message: Message):
+        user_id = message.from_user.id
+        
+        for chat_id, game in games.items():
+            if game.get("status") == "playing" and not game.get("game_over"):
+                bowler = game.get("current_bowler", {})
+                if bowler.get("id") == user_id and game.get("bowling_number") is None:
+                    await message.reply("🎯 **Send bowling number (1-6)**\n\nExample: `4`\n\n⏰ You have 60 seconds!")
+                    return
+        
+        for chat_id, game in team_games.items():
+            if game.get("status") == "playing" and not game.get("game_over"):
+                bowler = game.get("current_bowler", {})
+                if bowler.get("id") == user_id and game.get("bowling_number") is None:
+                    await message.reply("🎯 **Send bowling number (1-6)**\n\nExample: `4`\n\n⏰ You have 60 seconds!")
+                    return
+        
+        await message.reply("🏏 **Welcome to Cricket Game Bot!**\n\nUse me in a group to play cricket games.\nAdd me to a group and use /start there!\n\n**Commands:**\n/start - Start game (Admin) or Vote (Member)\n/joingame - Join a solo game\n/score - Check live score")
 
     @app.on_message(filters.command("score") & filters.group)
     async def score_cmd(client, message: Message):
@@ -386,22 +407,13 @@ def register_handlers(app):
 ─────⊱◈◈◈⊰─────"""
         
         try:
-            if USER_STATS_IMAGE.startswith(('http://', 'https://')):
-                await client.send_photo(
-                    message.chat.id,
-                    USER_STATS_IMAGE,
-                    caption=stats_text,
-                    has_spoiler=True,
-                    parse_mode=ParseMode.HTML
-                )
-            else:
-                await client.send_photo(
-                    message.chat.id,
-                    USER_STATS_IMAGE,
-                    caption=stats_text,
-                    has_spoiler=True,
-                    parse_mode=ParseMode.HTML
-                )
+            await client.send_photo(
+                message.chat.id,
+                USER_STATS_IMAGE,
+                caption=stats_text,
+                has_spoiler=True,
+                parse_mode=ParseMode.HTML
+            )
         except Exception as e:
             print(f"Error sending image: {e}")
             await message.reply(stats_text.replace(user_mention, f"@{username}" if username else name))
@@ -1260,26 +1272,7 @@ def register_handlers(app):
         await callback.message.delete()
         await callback.answer("❌ Match end cancelled!")
 
-    @app.on_message(filters.command("start") & filters.private)
-    async def start_dm(client, message: Message):
-        user_id = message.from_user.id
-        
-        for chat_id, game in games.items():
-            if game.get("status") == "playing" and not game.get("game_over"):
-                bowler = game.get("current_bowler", {})
-                if bowler.get("id") == user_id and game.get("bowling_number") is None:
-                    await message.reply("🎯 **Send bowling number (1-6)**\n\nExample: `4`\n\n⏰ You have 60 seconds!")
-                    return
-        
-        for chat_id, game in team_games.items():
-            if game.get("status") == "playing" and not game.get("game_over"):
-                bowler = game.get("current_bowler", {})
-                if bowler.get("id") == user_id and game.get("bowling_number") is None:
-                    await message.reply("🎯 **Send bowling number (1-6)**\n\nExample: `4`\n\n⏰ You have 60 seconds!")
-                    return
-        
-        await message.reply("🏏 **Welcome to Cricket Game Bot!**\n\nUse me in a group to play cricket games.\nAdd me to a group and use /start there!\n\n**Commands:**\n/start - Start game (Admin) or Vote (Member)\n/joingame - Join a solo game\n/score - Check live score")
-
+    # ================= BOWLING DM =================
     @app.on_message(filters.private & filters.text)
     async def bowling_dm(client, message):
         user_id = message.from_user.id
@@ -1293,6 +1286,7 @@ def register_handlers(app):
         
         num = int(text)
         
+        # Solo mode
         for chat_id, game in games.items():
             if game.get("status") != "playing" or game.get("game_over"):
                 continue
@@ -1314,6 +1308,7 @@ def register_handlers(app):
             await client.send_video(chat_id, BATTING_VIDEO, caption=f"Hey {batter_clickable}, now you're batting! Send number (1-6) in GROUP")
             return
         
+        # Team mode
         for chat_id, game in team_games.items():
             if game.get("status") != "playing" or game.get("game_over"):
                 continue
@@ -1337,10 +1332,12 @@ def register_handlers(app):
         
         await message.reply("❌ No active game found where you are the bowler!")
 
+    # ================= BATTING =================
     @app.on_message(filters.group & filters.text & ~filters.bot)
     async def batting_msg(client, message):
         chat_id = message.chat.id
         
+        # Solo mode
         game = games.get(chat_id)
         if game:
             if game.get("status") != "playing" or game.get("game_over") or game.get("bowling_number") is None:
@@ -1393,6 +1390,7 @@ def register_handlers(app):
                     await send_bowling_video(client, chat_id, bowler)
             return
         
+        # Team mode
         team_game = team_games.get(chat_id)
         if not team_game:
             return
@@ -1460,6 +1458,7 @@ def register_handlers(app):
                         del team_hosts[chat_id]
                 return
             
+            # Find next batter
             next_batter_index = team_game["current_batter_index"] + 1
             for i in range(next_batter_index, len(team_game[team_key])):
                 if not team_game[team_key][i].get("out", False):
@@ -1684,6 +1683,7 @@ def register_handlers(app):
                 await client.send_message(chat_id, f"✅ Time's up! {players_count} players joined. Starting game...")
                 await start_game_match(client, chat_id)
 
+    # ================= JOIN GAME COMMAND (WORKING) =================
     @app.on_message(filters.command("joingame") & filters.group)
     async def join_game_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -1693,15 +1693,41 @@ def register_handlers(app):
             return await message.reply("❌ No active solo game! Use /start and select Solo mode first.")
         
         if game.get("status") != "waiting":
-            return await message.reply("❌ Game already started!")
+            return await message.reply("❌ Game already started! Cannot join now.")
         
-        if join_game(chat_id, message.from_user):
-            players_count = len(game["players"])
-            await message.reply(f"🎉 {message.from_user.first_name}, you've joined the solo game! (Player {players_count}) 👍")
-            
-            if players_count >= 4:
-                await client.send_message(chat_id, f"✅ {players_count} players joined! Starting game...")
-                await start_game_match(client, chat_id)
+        user = message.from_user
+        
+        # Check if already joined
+        for p in game.get("players", []):
+            if p["id"] == user.id:
+                return await message.reply("❌ You already joined this game!")
+        
+        # Add player directly
+        player_data = {
+            "id": user.id,
+            "name": user.first_name,
+            "username": user.username,
+            "score": 0,
+            "balls": 0,
+            "fours": 0,
+            "sixes": 0,
+            "out": False,
+            "history": []
+        }
+        
+        if "players" not in game:
+            game["players"] = []
+        
+        game["players"].append(player_data)
+        players_count = len(game["players"])
+        
+        await message.reply(f"🎉 {user.first_name}, you've joined the solo game! (Player {players_count}) 👍")
+        
+        # Auto start when 4 players join
+        if players_count >= 4:
+            await client.send_message(chat_id, f"✅ {players_count} players joined! Starting game in 3 seconds...")
+            await asyncio.sleep(3)
+            await start_game_match(client, chat_id)
 
     async def start_game_match(client, chat_id):
         game = games.get(chat_id)
@@ -1738,6 +1764,7 @@ def register_handlers(app):
         await asyncio.sleep(1)
         await send_bowling_video(client, chat_id, bowler)
 
+    # ================= TEAM MODE FUNCTIONS =================
     async def team_mode_start(client, callback):
         chat_id = callback.message.chat.id
         keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("👑 I'm the Host", callback_data="team_become_host")]])
@@ -1767,135 +1794,209 @@ def register_handlers(app):
         team_hosts[chat_id] = {"id": user.id, "name": user.first_name, "username": user.username}
         
         team_games[chat_id] = {
-            "host_id": user.id, "host_name": user.first_name, "status": "waiting_host",
-            "team_a": [], "team_b": [], "captain_a": None, "captain_b": None,
-            "toss_winner": None, "toss_decision": None, "overs": 0,
-            "team_a_score": 0, "team_b_score": 0, "team_a_wickets": 0, "team_b_wickets": 0,
-            "current_team": None, "target": None, "game_over": False, "winner": None,
-            "match_start_time": None, "match_end_time": None, "total_balls": 0,
-            "team_a_name": "Team A", "team_b_name": "Team B"
+            "host_id": user.id,
+            "host_name": user.first_name,
+            "status": "waiting_host",
+            "team_a": [],
+            "team_b": [],
+            "captain_a": None,
+            "captain_b": None,
+            "toss_winner": None,
+            "toss_decision": None,
+            "overs": 0,
+            "team_a_score": 0,
+            "team_b_score": 0,
+            "team_a_wickets": 0,
+            "team_b_wickets": 0,
+            "current_team": None,
+            "target": None,
+            "game_over": False,
+            "winner": None,
+            "match_start_time": None,
+            "match_end_time": None,
+            "total_balls": 0,
+            "team_a_name": "Team A",
+            "team_b_name": "Team B"
         }
         
         await callback.message.delete()
         
         try:
-            await client.send_photo(chat_id, TEAM_CHAPU_IMG, caption=f"[{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏")
+            await client.send_photo(chat_id, TEAM_CHAPU_IMG, caption=f"[{user.first_name}](tg://user?id={user.id}) is now the game host!\n\nUse /create_team to start team creation.\n\n🏏 Let's get the match started!")
         except:
-            await client.send_message(chat_id, f"[{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏")
+            await client.send_message(chat_id, f"[{user.first_name}](tg://user?id={user.id}) is now the game host!\n\nUse /create_team to start team creation.\n\n🏏 Let's get the match started!")
         
         await callback.answer()
 
+    # ================= CREATE TEAM COMMAND (WORKING) =================
     @app.on_message(filters.command("create_team") & filters.group)
-    async def create_team_cmd(client, message):
+    async def create_team_cmd(client, message: Message):
         chat_id = message.chat.id
         user_id = message.from_user.id
         
         host = team_hosts.get(chat_id)
         if not host:
-            await message.reply("❌ No game host found! Start team mode first.")
+            await message.reply("❌ No game host found! First use /start and select Team mode, then click 'I'm the Host' button.")
             return
         
-        if host["id"] != user_id:
+        if host.get("id") != user_id:
             await message.reply("❌ Only the game host can create teams!")
             return
         
         game = team_games.get(chat_id)
-        if not game or game["status"] != "waiting_host":
-            await message.reply("❌ Teams already created!")
+        if not game:
+            await message.reply("❌ No active team game found! Please start team mode again.")
             return
         
+        if game.get("status") != "waiting_host":
+            await message.reply("❌ Teams already created or game already started!")
+            return
+        
+        # Initialize teams
+        game["team_a"] = []
+        game["team_b"] = []
         game["status"] = "team_creation_a"
-        await message.reply("🎉 Team creation is underway! Join Team A by sending /join_teamA 📣\n\n")
+        game["host_id"] = user_id
+        
+        await message.reply("🎉 Team creation is underway!\n\n📣 Join Team A by sending /join_teamA\n⏰ You have 50 seconds for Team A\n\n🏏 Let's get started!")
+        
         asyncio.create_task(team_a_timer(client, chat_id))
-
-    @app.on_message(filters.command("join_teamA") & filters.group)
-    async def join_team_a_cmd(client, message):
-        chat_id = message.chat.id
-        user = message.from_user
-        game = team_games.get(chat_id)
-        host = team_hosts.get(chat_id)
-        
-        if not game or game["status"] != "team_creation_a":
-            await message.reply("❌ Team A is not open for joining!")
-            return
-        
-        if host and host["id"] == user.id:
-            await message.reply("❌ You are the host! Host cannot join any team.")
-            return
-        
-        if any(p["id"] == user.id for p in game["team_a"]):
-            await message.reply("❌ You already joined Team A!")
-            return
-        
-        if any(p["id"] == user.id for p in game["team_b"]):
-            await message.reply("❌ You already joined Team B!")
-            return
-        
-        game["team_a"].append({
-            "id": user.id, "name": user.first_name, "username": user.username,
-            "score": 0, "balls": 0, "fours": 0, "sixes": 0, "out": False, "history": []
-        })
-        
-        await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team A!")
 
     async def team_a_timer(client, chat_id):
         await asyncio.sleep(50)
         game = team_games.get(chat_id)
-        if game and game["status"] == "team_creation_a":
+        if game and game.get("status") == "team_creation_a":
             game["status"] = "team_creation_b"
-            await client.send_message(chat_id, f"⏰ Time's up for Team A! ({len(game['team_a'])} players joined)\n\n🎉 Join Team B by sending /join_teamB 📣")
+            team_a_count = len(game.get("team_a", []))
+            await client.send_message(
+                chat_id, 
+                f"⏰ Time's up for Team A! ({team_a_count} players joined)\n\n📣 Join Team B by sending /join_teamB\n⏰ You have 50 seconds for Team B"
+            )
             asyncio.create_task(team_b_timer(client, chat_id))
-
-    @app.on_message(filters.command("join_teamB") & filters.group)
-    async def join_team_b_cmd(client, message):
-        chat_id = message.chat.id
-        user = message.from_user
-        game = team_games.get(chat_id)
-        host = team_hosts.get(chat_id)
-        
-        if not game or game["status"] != "team_creation_b":
-            await message.reply("❌ Team B is not open for joining!")
-            return
-        
-        if host and host["id"] == user.id:
-            await message.reply("❌ You are the host! Host cannot join any team.")
-            return
-        
-        if any(p["id"] == user.id for p in game["team_b"]):
-            await message.reply("❌ You already joined Team B!")
-            return
-        
-        if any(p["id"] == user.id for p in game["team_a"]):
-            await message.reply("❌ You already joined Team A!")
-            return
-        
-        game["team_b"].append({
-            "id": user.id, "name": user.first_name, "username": user.username,
-            "score": 0, "balls": 0, "fours": 0, "sixes": 0, "out": False, "history": []
-        })
-        
-        await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team B!")
 
     async def team_b_timer(client, chat_id):
         await asyncio.sleep(50)
         game = team_games.get(chat_id)
-        if game and game["status"] == "team_creation_b":
+        if game and game.get("status") == "team_creation_b":
             game["status"] = "captain_selection"
-            await client.send_message(chat_id, "👋 Hey, now members are joined the teams! 🎉 Choose Team captains user /choose_cap 📝")
+            team_a_count = len(game.get("team_a", []))
+            team_b_count = len(game.get("team_b", []))
+            await client.send_message(
+                chat_id, 
+                f"⏰ Time's up for Team B! ({team_b_count} players joined)\n\n👥 Final Teams:\n🏏 Team A: {team_a_count} players\n🏏 Team B: {team_b_count} players\n\n🎯 Now choose team captains using /choose_cap"
+            )
+
+    @app.on_message(filters.command("join_teamA") & filters.group)
+    async def join_team_a_cmd(client, message: Message):
+        chat_id = message.chat.id
+        user = message.from_user
+        game = team_games.get(chat_id)
+        
+        if not game:
+            await message.reply("❌ No active team game found!")
+            return
+        
+        if game.get("status") != "team_creation_a":
+            await message.reply("❌ Team A registration is closed! Only Team B is open now.")
+            return
+        
+        host = team_hosts.get(chat_id)
+        if host and host.get("id") == user.id:
+            await message.reply("❌ You are the host! Host cannot join any team.")
+            return
+        
+        for p in game.get("team_a", []):
+            if p["id"] == user.id:
+                await message.reply("❌ You already joined Team A!")
+                return
+        
+        for p in game.get("team_b", []):
+            if p["id"] == user.id:
+                await message.reply("❌ You already joined Team B!")
+                return
+        
+        player_data = {
+            "id": user.id,
+            "name": user.first_name,
+            "username": user.username,
+            "score": 0,
+            "balls": 0,
+            "fours": 0,
+            "sixes": 0,
+            "out": False,
+            "history": []
+        }
+        
+        if "team_a" not in game:
+            game["team_a"] = []
+        
+        game["team_a"].append(player_data)
+        current_count = len(game["team_a"])
+        
+        await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team A! (Total: {current_count} players)")
+
+    @app.on_message(filters.command("join_teamB") & filters.group)
+    async def join_team_b_cmd(client, message: Message):
+        chat_id = message.chat.id
+        user = message.from_user
+        game = team_games.get(chat_id)
+        
+        if not game:
+            await message.reply("❌ No active team game found!")
+            return
+        
+        if game.get("status") != "team_creation_b":
+            await message.reply("❌ Team B is not open for joining yet! Wait for Team A to complete.")
+            return
+        
+        host = team_hosts.get(chat_id)
+        if host and host.get("id") == user.id:
+            await message.reply("❌ You are the host! Host cannot join any team.")
+            return
+        
+        for p in game.get("team_a", []):
+            if p["id"] == user.id:
+                await message.reply("❌ You already joined Team A! Cannot join Team B.")
+                return
+        
+        for p in game.get("team_b", []):
+            if p["id"] == user.id:
+                await message.reply("❌ You already joined Team B!")
+                return
+        
+        player_data = {
+            "id": user.id,
+            "name": user.first_name,
+            "username": user.username,
+            "score": 0,
+            "balls": 0,
+            "fours": 0,
+            "sixes": 0,
+            "out": False,
+            "history": []
+        }
+        
+        if "team_b" not in game:
+            game["team_b"] = []
+        
+        game["team_b"].append(player_data)
+        current_count = len(game["team_b"])
+        
+        await message.reply(f"✈️ [{user.first_name}](tg://user?id={user.id}) joined Team B! (Total: {current_count} players)")
 
     @app.on_message(filters.command("choose_cap") & filters.group)
-    async def choose_cap_cmd(client, message):
+    async def choose_cap_cmd(client, message: Message):
         chat_id = message.chat.id
         user_id = message.from_user.id
         
         host = team_hosts.get(chat_id)
-        if not host or host["id"] != user_id:
+        if not host or host.get("id") != user_id:
             await message.reply("❌ Only game host can start captain selection!")
             return
         
         game = team_games.get(chat_id)
-        if not game:
-            await message.reply("❌ No active game found!")
+        if not game or game.get("status") != "captain_selection":
+            await message.reply("❌ Captain selection not available now! Make sure teams are created.")
             return
         
         if game.get("captain_a") and game.get("captain_b"):
@@ -1907,10 +2008,10 @@ def register_handlers(app):
             [InlineKeyboardButton("🏆 Choose Team B Captain", callback_data="choose_cap_b")]
         ])
         
-        await message.reply("**Game Host, please choose captains for Team A and Team B:**\n\n", reply_markup=keyboard)
+        await message.reply("**🏏 Select Captains**\n\nClick below to choose captains for each team:", reply_markup=keyboard)
 
     @app.on_callback_query(filters.regex("^choose_cap_a$"))
-    async def choose_cap_a_callback(client, callback):
+    async def choose_cap_a_callback(client, callback: CallbackQuery):
         chat_id = callback.message.chat.id
         user_id = callback.from_user.id
         
@@ -1923,27 +2024,25 @@ def register_handlers(app):
             await callback.answer("❌ Team A captain already selected!", show_alert=True)
             return
         
-        for player in game["team_a"]:
+        for player in game.get("team_a", []):
             if player["id"] == user_id:
-                game["captain_a"] = player
-                await callback.answer(f"✅ {player['name']} is now Team A Captain!")
-                break
-        else:
-            await callback.answer("❌ You are not in Team A!", show_alert=True)
-            return
+                game["captain_a"] = player.copy()
+                await callback.answer(f"✅ You are now Team A Captain!")
+                
+                if game.get("captain_a") and game.get("captain_b"):
+                    await callback.message.delete()
+                    await start_toss(client, chat_id)
+                else:
+                    await callback.message.edit_text(
+                        f"🏏 **Captain Selection**\n\n✅ Team A Captain: {game['captain_a']['name']}\n⚠️ Team B Captain: Not selected yet\n\nTeam B members click below to become captain:",
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏆 Choose Team B Captain", callback_data="choose_cap_b")]])
+                    )
+                return
         
-        if game.get("captain_a") and game.get("captain_b"):
-            await callback.message.delete()
-            await start_toss(client, chat_id)
-        else:
-            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏏 Choose Team B Captain 🏏", callback_data="choose_cap_b")]])
-            await callback.message.edit_text(
-                f"🏏 **Captain Selection!** 🏏\n\n✅ Team A Captain: {game['captain_a']['name']}\n⚠️ Team B Captain: Not selected yet\n\nTeam B members click 'Team B Captain' button to become captain.",
-                reply_markup=keyboard
-            )
+        await callback.answer("❌ You are not in Team A! Only Team A members can be captain.", show_alert=True)
 
     @app.on_callback_query(filters.regex("^choose_cap_b$"))
-    async def choose_cap_b_callback(client, callback):
+    async def choose_cap_b_callback(client, callback: CallbackQuery):
         chat_id = callback.message.chat.id
         user_id = callback.from_user.id
         
@@ -1956,380 +2055,40 @@ def register_handlers(app):
             await callback.answer("❌ Team B captain already selected!", show_alert=True)
             return
         
-        for player in game["team_b"]:
+        for player in game.get("team_b", []):
             if player["id"] == user_id:
-                game["captain_b"] = player
-                await callback.answer(f"✅ {player['name']} is now Team B Captain!")
-                break
-        else:
-            await callback.answer("❌ You are not in Team B!", show_alert=True)
-            return
+                game["captain_b"] = player.copy()
+                await callback.answer(f"✅ You are now Team B Captain!")
+                
+                if game.get("captain_a") and game.get("captain_b"):
+                    await callback.message.delete()
+                    await start_toss(client, chat_id)
+                else:
+                    await callback.message.edit_text(
+                        f"🏏 **Captain Selection**\n\n⚠️ Team A Captain: Not selected yet\n✅ Team B Captain: {game['captain_b']['name']}\n\nTeam A members click below to become captain:",
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏆 Choose Team A Captain", callback_data="choose_cap_a")]])
+                    )
+                return
         
-        if game.get("captain_a") and game.get("captain_b"):
-            await callback.message.delete()
-            await start_toss(client, chat_id)
-        else:
-            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏏 Choose Team A Captain 🏏", callback_data="choose_cap_a")]])
-            await callback.message.edit_text(
-                f"🏏 **Captain Selection!** 🏏\n\n⚠️ Team A Captain: Not selected yet\n✅ Team B Captain: {game['captain_b']['name']}\n\nTeam A members click 'Team A Captain' button to become captain.",
-                reply_markup=keyboard
-            )
+        await callback.answer("❌ You are not in Team B! Only Team B members can be captain.", show_alert=True)
 
     async def start_toss(client, chat_id):
         game = team_games.get(chat_id)
         if not game:
             return
         
+        game["status"] = "toss"
+        
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🪙 HEADS", callback_data="toss_heads")],
             [InlineKeyboardButton("🪙 TAILS", callback_data="toss_tails")]
         ])
         
-        await client.send_message(chat_id, "Team Captains, choose Heads or Tails:\n\n", reply_markup=keyboard)
-        game["status"] = "toss"
-
-    @app.on_callback_query(filters.regex("^toss_"))
-    async def toss_callback(client, callback):
-        chat_id = callback.message.chat.id
-        user_id = callback.from_user.id
-        
-        game = team_games.get(chat_id)
-        if not game or game["status"] != "toss":
-            await callback.answer("❌ No toss in progress!", show_alert=True)
-            return
-        
-        if game["captain_a"]["id"] != user_id:
-            await callback.answer("❌ Only Team A captain can do the toss!", show_alert=True)
-            return
-        
-        choice = callback.data.split("_")[1]
-        toss_result = random.choice(["heads", "tails"])
-        
-        cap_a_id = game['captain_a']['id']
         cap_a_name = game['captain_a']['name']
-        cap_a_username = game['captain_a'].get('username')
-        cap_a_display = f"@{cap_a_username}" if cap_a_username else cap_a_name
-        
-        cap_b_id = game['captain_b']['id']
         cap_b_name = game['captain_b']['name']
-        cap_b_username = game['captain_b'].get('username')
-        cap_b_display = f"@{cap_b_username}" if cap_b_username else cap_b_name
         
-        toss_video_url = TOSS_VIDEO
-        await callback.message.delete()
-        
-        cap_a_clickable = f"[{cap_a_display}](tg://user?id={cap_a_id})"
-        cap_b_clickable = f"[{cap_b_display}](tg://user?id={cap_b_id})"
-        
-        if choice == toss_result:
-            winner_clickable = cap_a_clickable
-            winner_team = "A"
-        else:
-            winner_clickable = cap_b_clickable
-            winner_team = "B"
-        
-        caption_text = f"🪙 The coin shows: {toss_result.upper()}!\n\n🅰️ - {cap_a_clickable} chose {choice.upper()}\n🅱️ {cap_b_clickable} got {toss_result.upper()}\n\n🏆 {winner_clickable} from Team {winner_team} won the toss!\n\n🏆 {winner_clickable}, please choose to Bat or Bowl:"
-        
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🏏 BAT FIRST", callback_data="toss_bat")],
-            [InlineKeyboardButton("⚾ BOWL FIRST", callback_data="toss_bowl")]
-        ])
-        
-        await client.send_video(chat_id, toss_video_url, caption=caption_text, reply_markup=keyboard)
-        game["toss_winner"] = winner_team
-
-    @app.on_callback_query(filters.regex("^toss_bat$|^toss_bowl$"))
-    async def toss_decision_callback(client, callback):
-        chat_id = callback.message.chat.id
-        user_id = callback.from_user.id
-        
-        game = team_games.get(chat_id)
-        if not game:
-            await callback.answer("❌ No active game found!", show_alert=True)
-            return
-        
-        decision = callback.data.split("_")[1]
-        toss_winner = game.get("toss_winner")
-        
-        if toss_winner == "A" and game["captain_a"]["id"] != user_id:
-            await callback.answer("❌ Only Team A captain can decide!", show_alert=True)
-            return
-        elif toss_winner == "B" and game["captain_b"]["id"] != user_id:
-            await callback.answer("❌ Only Team B captain can decide!", show_alert=True)
-            return
-        
-        game["toss_decision"] = decision
-        batting_team = toss_winner if decision == "bat" else ("A" if toss_winner == "B" else "B")
-        
-        await callback.message.delete()
-        await select_overs(client, chat_id, batting_team)
-
-    async def select_overs(client, chat_id, batting_team):
-        game = team_games.get(chat_id)
-        if not game:
-            return
-        
-        buttons = []
-        row = []
-        for i in range(1, 21):
-            row.append(InlineKeyboardButton(f"{i}", callback_data=f"over_{i}"))
-            if len(row) == 5:
-                buttons.append(row)
-                row = []
-        if row:
-            buttons.append(row)
-        
-        keyboard = InlineKeyboardMarkup(buttons)
-        await client.send_message(chat_id, "📊 **Select number of overs:**\n\nChoose overs (1 to 20 overs per side):", reply_markup=keyboard)
-        
-        game["status"] = "over_selection"
-        game["batting_first"] = batting_team
-
-    @app.on_callback_query(filters.regex("^over_"))
-    async def over_selection_callback(client, callback):
-        chat_id = callback.message.chat.id
-        
-        game = team_games.get(chat_id)
-        if not game or game["status"] != "over_selection":
-            await callback.answer("❌ No over selection in progress!", show_alert=True)
-            return
-        
-        overs = int(callback.data.split("_")[1])
-        game["overs"] = overs
-        game["total_balls_limit"] = overs * 6
-        
-        await callback.message.delete()
-        
-        batting_team = game["batting_first"]
-        team_name = "Team A" if batting_team == "A" else "Team B"
-        
-        await client.send_message(chat_id, f"✅ Match set! {overs} overs per side.\n\n🚀 Match is starting...\n🏏 {team_name} will bat first!\n\nLet the game begin! 🎉")
-        
-        game["match_start_time"] = datetime.now()
-        game["status"] = "playing"
-        
-        await start_team_batting(client, chat_id, batting_team)
-
-    async def start_team_batting(client, chat_id, team):
-        game = team_games.get(chat_id)
-        if not game:
-            return
-        
-        team_key = f"team_{team.lower()}"
-        players = game[team_key]
-        
-        for p in players:
-            p["score"] = 0
-            p["balls"] = 0
-            p["fours"] = 0
-            p["sixes"] = 0
-            p["out"] = False
-            p["history"] = []
-        
-        game["current_team"] = team
-        game["current_batter_index"] = 0
-        game["current_batter"] = players[0].copy()
-        
-        if len(players) == 1:
-            game["current_bowler_index"] = 0
-            game["current_bowler"] = players[0].copy()
-        else:
-            game["current_bowler_index"] = 1 if len(players) > 1 else 0
-            game["current_bowler"] = players[game["current_bowler_index"]].copy()
-        
-        game["current_bowler_balls"] = 0
-        game["bowling_number"] = None
-        game["team_total"] = 0
-        game["team_wickets"] = 0
-        game["total_balls_in_inning"] = 0
-        
-        batter_clickable = f"[{game['current_batter']['name']}](tg://user?id={game['current_batter']['id']})"
-        bowler_clickable = f"[{game['current_bowler']['name']}](tg://user?id={game['current_bowler']['id']})"
-        
-        await client.send_message(chat_id, f"🏏 **Team {team} Batting**\n\nBatter: {batter_clickable}\nBowler: {bowler_clickable}")
-        await send_bowling_video_team(client, chat_id, game["current_bowler"])
-
-    @app.on_message(filters.command("add_A") & filters.group)
-    async def add_to_team_a_cmd(client, message):
-        chat_id = message.chat.id
-        user_id = message.from_user.id
-        
-        host = team_hosts.get(chat_id)
-        if not host or host["id"] != user_id:
-            await message.reply("❌ Only host can add players to Team A!")
-            return
-        
-        game = team_games.get(chat_id)
-        if not game or game["status"] not in ["team_creation_a", "team_creation_b", "captain_selection"]:
-            await message.reply("❌ Cannot add players now!")
-            return
-        
-        added_user = None
-        if message.reply_to_message:
-            added_user = message.reply_to_message.from_user
-        elif message.command and len(message.command) > 1:
-            username = message.command[1].replace("@", "")
-            try:
-                added_user = await client.get_users(username)
-            except:
-                await message.reply(f"❌ User @{username} not found!")
-                return
-        
-        if not added_user:
-            await message.reply("❌ Usage: /add_A @username or reply to a user's message")
-            return
-        
-        if any(p["id"] == added_user.id for p in game["team_a"]):
-            await message.reply(f"❌ {added_user.first_name} already in Team A!")
-            return
-        
-        if any(p["id"] == added_user.id for p in game["team_b"]):
-            await message.reply(f"❌ {added_user.first_name} already in Team B!")
-            return
-        
-        game["team_a"].append({
-            "id": added_user.id, "name": added_user.first_name, "username": added_user.username,
-            "score": 0, "balls": 0, "fours": 0, "sixes": 0, "out": False, "history": []
-        })
-        
-        current = len(game["team_a"])
-        username_display = f"@{added_user.username}" if added_user.username else added_user.first_name
-        await message.reply(f"added {username_display} to Team A! ({current} players)")
-
-    @app.on_message(filters.command("add_B") & filters.group)
-    async def add_to_team_b_cmd(client, message):
-        chat_id = message.chat.id
-        user_id = message.from_user.id
-        
-        host = team_hosts.get(chat_id)
-        if not host or host["id"] != user_id:
-            await message.reply("❌ Only host can add players to Team B!")
-            return
-        
-        game = team_games.get(chat_id)
-        if not game or game["status"] not in ["team_creation_b", "captain_selection"]:
-            await message.reply("❌ Cannot add players to Team B now!")
-            return
-        
-        added_user = None
-        if message.reply_to_message:
-            added_user = message.reply_to_message.from_user
-        elif message.command and len(message.command) > 1:
-            username = message.command[1].replace("@", "")
-            try:
-                added_user = await client.get_users(username)
-            except:
-                await message.reply(f"❌ User @{username} not found!")
-                return
-        
-        if not added_user:
-            await message.reply("❌ Usage: /add_B @username or reply to a user's message")
-            return
-        
-        if any(p["id"] == added_user.id for p in game["team_b"]):
-            await message.reply(f"❌ {added_user.first_name} already in Team B!")
-            return
-        
-        if any(p["id"] == added_user.id for p in game["team_a"]):
-            await message.reply(f"❌ {added_user.first_name} already in Team A!")
-            return
-        
-        game["team_b"].append({
-            "id": added_user.id, "name": added_user.first_name, "username": added_user.username,
-            "score": 0, "balls": 0, "fours": 0, "sixes": 0, "out": False, "history": []
-        })
-        
-        current = len(game["team_b"])
-        username_display = f"@{added_user.username}" if added_user.username else added_user.first_name
-        await message.reply(f"added {username_display} to Team B! ({current} players)")
-
-    @app.on_message(filters.command("shift_Team") & filters.group)
-    async def shift_team_cmd(client, message):
-        chat_id = message.chat.id
-        user_id = message.from_user.id
-        
-        host = team_hosts.get(chat_id)
-        if not host or host["id"] != user_id:
-            await message.reply("❌ Only host can shift players between teams!")
-            return
-        
-        game = team_games.get(chat_id)
-        if not game or game["status"] not in ["team_creation_a", "team_creation_b", "captain_selection"]:
-            await message.reply("❌ Cannot shift players now!")
-            return
-        
-        if not message.reply_to_message:
-            await message.reply("❌ Please reply to a user's message to shift them!")
-            return
-        
-        user_to_shift = message.reply_to_message.from_user
-        username_display = f"@{user_to_shift.username}" if user_to_shift.username else user_to_shift.first_name
-        
-        in_team_a = any(p["id"] == user_to_shift.id for p in game["team_a"])
-        
-        if not in_team_a:
-            in_team_b = any(p["id"] == user_to_shift.id for p in game["team_b"])
-            if not in_team_b:
-                await message.reply(f"❌ {username_display} is not in any team!")
-                return
-            current_team = "B"
-            target_team = "A"
-        else:
-            current_team = "A"
-            target_team = "B"
-        
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"Confirm shift to Team {target_team}", callback_data=f"shift_confirm_{user_to_shift.id}_{current_team}_{target_team}"),
-             InlineKeyboardButton("Cancel", callback_data="shift_cancel")]
-        ])
-        
-        await message.reply(f"🔄 {username_display} is currently in Team {current_team}.\nDo you want to shift them to Team {target_team}?", reply_markup=keyboard)
-
-    @app.on_callback_query(filters.regex("^shift_confirm_"))
-    async def shift_confirm_callback(client, callback):
-        chat_id = callback.message.chat.id
-        user_id = callback.from_user.id
-        
-        host = team_hosts.get(chat_id)
-        if not host or host["id"] != user_id:
-            await callback.answer("❌ Only host can confirm shift!", show_alert=True)
-            return
-        
-        game = team_games.get(chat_id)
-        if not game:
-            await callback.answer("❌ Game not found!", show_alert=True)
-            return
-        
-        data = callback.data.split("_")
-        user_to_shift_id = int(data[2])
-        current_team = data[3]
-        target_team = data[4]
-        
-        player = None
-        if current_team == "A":
-            for i, p in enumerate(game["team_a"]):
-                if p["id"] == user_to_shift_id:
-                    player = game["team_a"].pop(i)
-                    game["team_b"].append(player)
-                    break
-        else:
-            for i, p in enumerate(game["team_b"]):
-                if p["id"] == user_to_shift_id:
-                    player = game["team_b"].pop(i)
-                    game["team_a"].append(player)
-                    break
-        
-        if not player:
-            await callback.answer("❌ Player not found!", show_alert=True)
-            return
-        
-        username_display = f"@{player['username']}" if player['username'] else player['name']
-        
-        await callback.message.delete()
-        await callback.message.reply(f"🔄 {username_display} shifted from Team {current_team} to Team {target_team}!\n\n🏏 Team A: {len(game['team_a'])} players\n🏏 Team B: {len(game['team_b'])} players")
-        await callback.answer("✅ Player shifted successfully!")
-
-    @app.on_callback_query(filters.regex("^shift_cancel$"))
-    async def shift_cancel_callback(client, callback):
-        await callback.message.delete()
-        await callback.answer("❌ Shift cancelled!")
+        await client.send_message(
+            chat_id, 
+            f"🏏 **TOSS TIME** 🏏\n\nTeam A Captain: {cap_a_name}\nTeam B Captain: {cap_b_name}\n\n{cap_a_name}, choose Heads or Tails:",
+            reply_markup=keyboard
+        )
