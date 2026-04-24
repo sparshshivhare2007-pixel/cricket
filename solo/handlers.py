@@ -830,7 +830,7 @@ def register_handlers(app):
         
         await callback.message.delete()
         
-        await client.send_message(chat_id, f"👑 [{user.first_name}](tg://user?id={user.id}) is now the game host!\n\nUse /create_team to start team creation.")
+        await client.send_message(chat_id, f"👑 [{user.first_name}](tg://user?id={user.id}) is now the game host! Game host can create teams now by using /create_team. Let's get the match started! 🏏")
         await callback.answer()
 
     @app.on_message(filters.command("create_team") & filters.group)
