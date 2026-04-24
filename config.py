@@ -50,8 +50,7 @@ TOURNAMENT_HOST_IMAGE = os.path.join(IMAGES_PATH, "tournament_host.jpg")
 SELECT_GAME_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 # Team image after host selection
 TEAM_CHAPU_IMG = "https://files.catbox.moe/9w291u.jpg"
-
-# Toss video
+USER_RANKS_IMAGE = "https://files.catbox.moe/ftusam.jpg"
 TOSS_VIDEO = "https://files.catbox.moe/hhbun3.mp4"
 VOTE_IMAGE_FALLBACK = "https://files.catbox.moe/0odkk1.jpg"
 USER_STATS_IMAGE = "https://files.catbox.moe/0odkk1.jpg"
