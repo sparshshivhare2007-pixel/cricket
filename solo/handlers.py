@@ -9,7 +9,7 @@ import asyncio
 from datetime import datetime
 import random
 
-print("🔴 LOADING HANDLERS.PY - FINAL COMPLETE VERSION")
+print("🔴 LOADING HANDLERS.PY - FINAL COMPLETE FIXED VERSION")
 
 active_votes = {}
 bowling_tasks = {}
@@ -612,7 +612,9 @@ def register_handlers(app):
             "winner": None,
             "batting_order": [],
             "batting_order_names": [],
-            "ball_mode": 1
+            "ball_mode": 1,
+            "overs": 0,
+            "target": 0
         }
         
         await callback.message.delete()
@@ -652,7 +654,7 @@ def register_handlers(app):
     async def team_a_timer(client, chat_id):
         await asyncio.sleep(50)
         game = team_games.get(chat_id)
-        if game and game.get("status") == "team_creation_a":
+        if game and game["status"] == "team_creation_a":
             game["status"] = "team_creation_b"
             team_a_count = len(game.get("team_a", []))
             await client.send_message(chat_id, f"⏰ Time's up for Team A! ({team_a_count} players joined)\n\n📣 Join Team B by sending /join_teamB\n⏰ You have 50 seconds for Team B")
@@ -1091,6 +1093,7 @@ def register_handlers(app):
         game["toss_winner"] = winner_team
         game["status"] = "toss_decision"
 
+    # ================= TOSS DECISION CALLBACK (FIXED) =================
     @app.on_callback_query(filters.regex("^toss_bat$|^toss_bowl$"))
     async def toss_decision_callback(client, callback):
         chat_id = callback.message.chat.id
@@ -1112,11 +1115,12 @@ def register_handlers(app):
             await callback.answer("❌ Only toss winner can decide!", show_alert=True)
             return
         
+        # CORRECT LOGIC:
         if decision == "bat":
-            batting_team = toss_winner
+            batting_team = toss_winner  # Toss winner bats first
             decision_text = "Batting"
-        else:
-            batting_team = "B" if toss_winner == "A" else "A"
+        else:  # bowl
+            batting_team = "B" if toss_winner == "A" else "A"  # Opposite team bats first
             decision_text = "Bowling"
         
         game["batting_first"] = batting_team
@@ -1129,9 +1133,9 @@ def register_handlers(app):
         await client.send_message(
             chat_id,
             f"🏏 @{winner_captain.get('username', winner_captain['name'])} from Team {toss_winner} chose to {decision_text} first.\n"
-            f"{bowling_name} will {'Bowling' if decision == 'bat' else 'Batting'}.\n\n"
             f"🏏 Batting: {batting_name}\n"
-            f"🧤 Bowling: {bowling_name}"
+            f"🧤 Bowling: {bowling_name}\n\n"
+            f"Now select overs:"
         )
         
         await select_overs(client, chat_id, batting_team)
@@ -1609,12 +1613,20 @@ def register_handlers(app):
         except:
             await client.send_message(chat_id, f"🏏 {runs} runs!")
         
-        # Check for win in second innings
-        if game["current_team"] == "B" and game["team_total"] > game["team_a_score"]:
-            await end_match_team(client, chat_id, "B")
+        # ========== FIXED: TARGET CHASE LOGIC ==========
+        # Check for win in second innings when target is reached
+        if game["current_team"] == "B":
+            target = game.get("target", 0)
+            if target > 0 and game["team_total"] >= target:
+                await end_match_team(client, chat_id, "B")
+                return
+        
+        # Check if innings complete (overs finished)
+        if game["total_balls_in_inning"] >= game["total_balls_limit"] and game["total_balls_limit"] > 0:
+            await end_innings_team(client, chat_id)
             return
         
-        # Check if over complete (6 balls)
+        # Check if over complete (6 balls) - change bowler
         if game["current_bowler_balls"] >= 6:
             await change_bowler_team(client, chat_id)
         else:
@@ -1651,17 +1663,22 @@ def register_handlers(app):
         if game["current_team"] == "A":
             game["team_a_score"] = game["team_total"]
             game["team_a_wickets"] = game["team_wickets"]
-            game["team_a_overs"] = f"{game['total_balls_in_inning'] // 6}.{game['total_balls_in_inning'] % 6}"
+            overs_played = game["total_balls_in_inning"]
+            game["team_a_overs"] = f"{overs_played // 6}.{overs_played % 6}"
+            
+            target = game["team_a_score"] + 1
             
             await client.send_message(
                 chat_id,
                 f"🏏 **Team A Innings Complete!**\n\n"
-                f"Total: {game['team_a_score']}/{game['team_a_wickets']}\n"
-                f"Overs: {game['team_a_overs']}\n\n"
-                f"Team B needs {game['team_a_score'] + 1} runs to win!\n\n"
-                f"Host: Use /bowling <number> to choose first bowler for Team B"
+                f"📊 Score: {game['team_a_score']}/{game['team_a_wickets']}\n"
+                f"📈 Overs: {game['team_a_overs']} / {game['overs']} overs\n\n"
+                f"🎯 **Team B needs {target} runs to win!**\n\n"
+                f"⚾ Host: Use /bowling <number> to choose first bowler for Team B\n"
+                f"📝 Use /member_lists to see player numbers"
             )
             
+            # Reset for Team B batting
             game["current_team"] = "B"
             game["current_batter"] = None
             game["current_bowler"] = None
@@ -1672,12 +1689,15 @@ def register_handlers(app):
             game["total_balls_in_inning"] = 0
             game["bowling_number"] = None
             game["status"] = "waiting_bowler"
+            game["target"] = target
             
         else:
             game["team_b_score"] = game["team_total"]
             game["team_b_wickets"] = game["team_wickets"]
-            game["team_b_overs"] = f"{game['total_balls_in_inning'] // 6}.{game['total_balls_in_inning'] % 6}"
+            overs_played = game["total_balls_in_inning"]
+            game["team_b_overs"] = f"{overs_played // 6}.{overs_played % 6}"
             
+            # Determine winner
             if game["team_b_score"] > game["team_a_score"]:
                 winner = "B"
             elif game["team_b_score"] < game["team_a_score"]:
