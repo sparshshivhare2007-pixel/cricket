@@ -768,7 +768,7 @@ def register_handlers(app):
     async def team_b_timer(client, chat_id):
         await asyncio.sleep(50)
         game = team_games.get(chat_id)
-        if game and game.get("status") == "team_creation_b":
+        if game and game["status"] == "team_creation_b":
             game["status"] = "captain_selection"
             team_a_count = len(game.get("team_a", []))
             team_b_count = len(game.get("team_b", []))
@@ -1668,7 +1668,18 @@ def register_handlers(app):
         
         game["team_wickets"] += 1
         
-        await client.send_message(chat_id, f"❌ **OUT!** {batter['name']} is out!")
+        # Send OUT VIDEO like solo mode
+        try:
+            await client.send_video(
+                chat_id, 
+                OUT_VIDEO, 
+                caption=f"❌ **OUT!** {batter['name']} is out!"
+            )
+        except:
+            await client.send_message(chat_id, f"❌ **OUT!** {batter['name']} is out!")
+        
+        # Walking back message
+        await client.send_message(chat_id, f"🏃‍♂️ {batter['name']} is walking back to the pavilion 👋")
         
         active_batters = [p for p in game[team_key] if not p.get("out", False)]
         
@@ -1803,6 +1814,7 @@ def register_handlers(app):
                 f"📝 Use /member_lists to see player numbers"
             )
             
+            # Reset for Team B batting
             game["current_team"] = "B"
             game["current_batter"] = None
             game["current_bowler"] = None
@@ -1814,6 +1826,7 @@ def register_handlers(app):
             game["bowling_number"] = None
             game["status"] = "waiting_bowler"
             game["target"] = target
+            game["game_over"] = False
             
         else:
             game["team_b_score"] = game["team_total"]
@@ -1898,6 +1911,17 @@ def register_handlers(app):
         if game.get("game_over"):
             await message.reply("❌ Game already over!")
             return
+        
+        # FIX: Agar second innings already start ho chuki hai toh swap mat karo
+        if game.get("current_team") == "B" and game.get("team_total") > 0:
+            await message.reply("❌ Second innings already in progress! Cannot swap.")
+            return
+        
+        # FIX: Agar Team A ki inning complete hai aur Team B ne start nahi kiya
+        if game.get("team_a_score") > 0 or game.get("team_a_wickets") > 0:
+            if game.get("status") == "waiting_bowler" or game.get("current_team") == "B":
+                await message.reply("⚠️ Second innings starting! Please choose bowler by /bowling <number>")
+                return
         
         await client.send_message(chat_id, f"⚠️ Innings changed! Hey {host['name']}, Please choose the bowler by command /bowling.")
         await end_innings_team(client, chat_id)
