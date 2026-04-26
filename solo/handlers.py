@@ -114,7 +114,7 @@ def register_handlers(app):
 /choose_cap - Choose team captains (Host)
 /add_A @user - Add player to Team A
 /add_B @user - Add player to Team B
-/shift_Team - Shift player between teams
+/shift_team <number> - Shift player between teams (Host)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
           📊 EXTRA COMMANDS
@@ -122,7 +122,7 @@ def register_handlers(app):
 
 /user_info - Get your user information
 /user_ranks - View player rankings
-/member_lists - View group members list
+/members - View team members & player numbers
 /startgame - Start new game (Admin)
 /matches - View active matches
 /live_matches - View live match updates
@@ -768,7 +768,7 @@ def register_handlers(app):
     async def team_b_timer(client, chat_id):
         await asyncio.sleep(50)
         game = team_games.get(chat_id)
-        if game and game["status"] == "team_creation_b":
+        if game and game.get("status") == "team_creation_b":
             game["status"] = "captain_selection"
             team_a_count = len(game.get("team_a", []))
             team_b_count = len(game.get("team_b", []))
@@ -985,6 +985,71 @@ def register_handlers(app):
         
         game["team_b"].append(player_data)
         await message.reply(f"added {added_user.first_name} to Team B! ({len(game['team_b'])} players)")
+
+    # ================= SHIFT TEAM COMMAND =================
+    @app.on_message(filters.command("shift_team") & filters.group)
+    async def shift_team_cmd(client, message: Message):
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        
+        host = team_hosts.get(chat_id)
+        if not host or host["id"] != user_id:
+            await message.reply("❌ Only host can shift players!")
+            return
+        
+        game = team_games.get(chat_id)
+        if not game:
+            await message.reply("❌ No active game!")
+            return
+        
+        args = message.text.split()
+        if len(args) < 2:
+            await message.reply("❌ Usage: `/shift_team <number>`\nExample: `/shift_team 1`\n\nUse /members to see player numbers.")
+            return
+        
+        try:
+            player_num = int(args[1])
+        except:
+            await message.reply("❌ Invalid number!")
+            return
+        
+        # Find player in either team
+        player = None
+        current_team = None
+        player_index = None
+        
+        for i, p in enumerate(game.get("team_a", [])):
+            if i + 1 == player_num:
+                player = p
+                current_team = "A"
+                player_index = i
+                break
+        
+        if not player:
+            offset = len(game.get("team_a", []))
+            for i, p in enumerate(game.get("team_b", [])):
+                if offset + i + 1 == player_num:
+                    player = p
+                    current_team = "B"
+                    player_index = i
+                    break
+        
+        if not player:
+            await message.reply(f"❌ Player number {player_num} not found! Use /members to see player numbers.")
+            return
+        
+        # Shift player to opposite team
+        if current_team == "A":
+            game["team_a"].pop(player_index)
+            game["team_b"].append(player)
+            await message.reply(f"✅ [{player['name']}](tg://user?id={player['id']}) shifted from Team A to Team B!")
+        else:
+            game["team_b"].pop(player_index)
+            game["team_a"].append(player)
+            await message.reply(f"✅ [{player['name']}](tg://user?id={player['id']}) shifted from Team B to Team A!")
+        
+        # Update members list
+        await client.send_message(chat_id, "📊 Teams updated! Use /members to see new team lists.")
 
     # ================= CHOOSE CAPTAIN COMMAND =================
     @app.on_message(filters.command("choose_cap") & filters.group)
@@ -1220,7 +1285,6 @@ def register_handlers(app):
             await callback.answer("❌ Only toss winner can decide!", show_alert=True)
             return
         
-        # CORRECT LOGIC:
         if decision == "bat":
             batting_team = toss_winner
             decision_text = "Batting"
@@ -1297,7 +1361,7 @@ def register_handlers(app):
         
         await client.send_message(
             chat_id, 
-            f"✅ Match set! {overs} overs per side.\n\n🚀 Match is starting...\n🏏 {team_name} will bat first!\n\nNow, which team will bowl first? 🤔\n\nHost: Use /bowling <number> to choose first bowler\nExample: /bowling 1\n\nUse /member_lists to see player numbers."
+            f"✅ Match set! {overs} overs per side.\n\n🚀 Match is starting...\n🏏 {team_name} will bat first!\n\nNow, which team will bowl first? 🤔\n\nHost: Use /bowling <number> to choose first bowler\nExample: /bowling 1\n\nUse /members to see player numbers."
         )
         
         game["current_team"] = batting_team
@@ -1320,7 +1384,7 @@ def register_handlers(app):
         
         args = message.text.split()
         if len(args) < 2:
-            await message.reply("❌ Usage: `/bowling <number>`\nExample: `/bowling 1`\n\nUse /member_lists to see player numbers.")
+            await message.reply("❌ Usage: `/bowling <number>`\nExample: `/bowling 1`\n\nUse /members to see player numbers.")
             return
         
         try:
@@ -1335,7 +1399,7 @@ def register_handlers(app):
         
         players = game.get(team_key, [])
         if player_num < 1 or player_num > len(players):
-            await message.reply(f"❌ Invalid number! Team {bowling_team} has {len(players)} players. Use /member_lists")
+            await message.reply(f"❌ Invalid number! Team {bowling_team} has {len(players)} players. Use /members")
             return
         
         selected_bowler = players[player_num - 1].copy()
@@ -1366,7 +1430,7 @@ def register_handlers(app):
         
         args = message.text.split()
         if len(args) < 2:
-            await message.reply("❌ Usage: `/batting <number>`\nExample: `/batting 1`\n\nUse /member_lists to see player numbers.")
+            await message.reply("❌ Usage: `/batting <number>`\nExample: `/batting 1`\n\nUse /members to see player numbers.")
             return
         
         try:
@@ -1668,7 +1732,6 @@ def register_handlers(app):
         
         game["team_wickets"] += 1
         
-        # Send OUT VIDEO like solo mode
         try:
             await client.send_video(
                 chat_id, 
@@ -1678,7 +1741,6 @@ def register_handlers(app):
         except:
             await client.send_message(chat_id, f"❌ **OUT!** {batter['name']} is out!")
         
-        # Walking back message
         await client.send_message(chat_id, f"🏃‍♂️ {batter['name']} is walking back to the pavilion 👋")
         
         active_batters = [p for p in game[team_key] if not p.get("out", False)]
@@ -1687,7 +1749,6 @@ def register_handlers(app):
             await end_innings_team(client, chat_id)
             return
         
-        # AUTO NEXT BATTER from batting_order
         batting_order = game.get("batting_order", [])
         current_index_in_order = None
         
@@ -1750,19 +1811,16 @@ def register_handlers(app):
         except:
             await client.send_message(chat_id, f"🏏 {runs} runs!")
         
-        # Check for win in second innings when target is reached
         if game["current_team"] == "B":
             target = game.get("target", 0)
             if target > 0 and game["team_total"] >= target:
                 await end_match_team(client, chat_id, "B")
                 return
         
-        # Check if innings complete (overs finished)
         if game["total_balls_in_inning"] >= game["total_balls_limit"] and game["total_balls_limit"] > 0:
             await end_innings_team(client, chat_id)
             return
         
-        # Check if over complete (6 balls) - change bowler
         if game["current_bowler_balls"] >= 6:
             await change_bowler_team(client, chat_id)
         else:
@@ -1811,10 +1869,9 @@ def register_handlers(app):
                 f"📈 Overs: {game['team_a_overs']} / {game['overs']} overs\n\n"
                 f"🎯 **Team B needs {target} runs to win!**\n\n"
                 f"⚾ Host: Use /bowling <number> to choose first bowler for Team B\n"
-                f"📝 Use /member_lists to see player numbers"
+                f"📝 Use /members to see player numbers"
             )
             
-            # Reset for Team B batting
             game["current_team"] = "B"
             game["current_batter"] = None
             game["current_bowler"] = None
@@ -1912,12 +1969,10 @@ def register_handlers(app):
             await message.reply("❌ Game already over!")
             return
         
-        # FIX: Agar second innings already start ho chuki hai toh swap mat karo
         if game.get("current_team") == "B" and game.get("team_total") > 0:
             await message.reply("❌ Second innings already in progress! Cannot swap.")
             return
         
-        # FIX: Agar Team A ki inning complete hai aur Team B ne start nahi kiya
         if game.get("team_a_score") > 0 or game.get("team_a_wickets") > 0:
             if game.get("status") == "waiting_bowler" or game.get("current_team") == "B":
                 await message.reply("⚠️ Second innings starting! Please choose bowler by /bowling <number>")
@@ -1926,8 +1981,8 @@ def register_handlers(app):
         await client.send_message(chat_id, f"⚠️ Innings changed! Hey {host['name']}, Please choose the bowler by command /bowling.")
         await end_innings_team(client, chat_id)
 
-    @app.on_message(filters.command("member_lists") & filters.group)
-    async def member_lists_cmd(client, message: Message):
+    @app.on_message(filters.command("members") & filters.group)
+    async def members_cmd(client, message: Message):
         chat_id = message.chat.id
         
         solo_game = games.get(chat_id)
@@ -1988,38 +2043,44 @@ def register_handlers(app):
             cap_a = team_game.get("captain_a")
             cap_b = team_game.get("captain_b")
             
-            cap_a_name = f"[{cap_a['name']}](tg://user?id={cap_a['id']})" if cap_a else "Unknown"
-            cap_b_name = f"[{cap_b['name']}](tg://user?id={cap_b['id']})" if cap_b else "Unknown"
+            cap_a_name = f"[{cap_a['name']}](tg://user?id={cap_a['id']})" if cap_a else "None"
+            cap_b_name = f"[{cap_b['name']}](tg://user?id={cap_b['id']})" if cap_b else "None"
             
             team_a_list = ""
             for i, p in enumerate(team_game.get("team_a", []), 1):
-                player_name = f"[{p['name']}](tg://user?id={p['id']})"
+                player_name = f"{i}. [{p['name']}](tg://user?id={p['id']})"
                 if cap_a and p["id"] == cap_a["id"]:
-                    team_a_list += f"{i}. {player_name} [🧢] MEMBER OF TEAM A\n"
+                    team_a_list += f"{player_name} [🧢]\n"
                 else:
-                    team_a_list += f"{i}. {player_name} MEMBER OF TEAM A\n"
+                    team_a_list += f"{player_name}\n"
             
             team_b_list = ""
+            offset_a = len(team_game.get("team_a", []))
             for i, p in enumerate(team_game.get("team_b", []), 1):
-                player_name = f"[{p['name']}](tg://user?id={p['id']})"
+                player_num = offset_a + i
+                player_name = f"{player_num}. [{p['name']}](tg://user?id={p['id']})"
                 if cap_b and p["id"] == cap_b["id"]:
-                    team_b_list += f"{i}. {player_name} [🧢] MEMBER OF TEAM B\n"
+                    team_b_list += f"{player_name} [🧢]\n"
                 else:
-                    team_b_list += f"{i}. {player_name} MEMBER OF TEAM B\n"
+                    team_b_list += f"{player_name}\n"
             
-            text = f"""👽 **Game Host:** {host_name}
-
-🏏 **Batting:** Team {batting_team} ({innings_status})
-🎯 **Bowling:** Team {bowling_team}
-
-🎩 **Team A Captain:** {cap_a_name}
-👒 **Team B Captain:** {cap_b_name}
-
-🔵 **Team A**
-{team_a_list if team_a_list else '   No players'}
-
-🔴 **Team B**
-{team_b_list if team_b_list else '   No players'}"""
+            total_players = len(team_game.get("team_a", [])) + len(team_game.get("team_b", []))
+            
+            text = f"👽 **Game Host:** {host_name}\n"
+            text += f"📊 **Total Players:** {total_players}\n\n"
+            
+            text += f"🏏 **Batting:** Team {batting_team} ({innings_status})\n"
+            text += f"🎯 **Bowling:** Team {bowling_team}\n\n"
+            
+            text += f"🎩 **Team A Captain:** {cap_a_name}\n"
+            text += f"👒 **Team B Captain:** {cap_b_name}\n\n"
+            
+            text += "🔵 **Team A**\n"
+            text += team_a_list if team_a_list else "   No players\n"
+            text += "\n"
+            
+            text += "🔴 **Team B**\n"
+            text += team_b_list if team_b_list else "   No players\n"
             
             await message.reply(text)
         
@@ -2037,19 +2098,15 @@ def register_handlers(app):
             
             players_list = ""
             for i, p in enumerate(players, 1):
-                player_name = f"[{p['name']}](tg://user?id={p['id']})"
+                player_name = f"{i}. [{p['name']}](tg://user?id={p['id']})"
                 status = "❌ OUT" if p.get("out", False) else "🏏 PLAYING"
-                players_list += f"{i}. {player_name} - {status}\n"
+                players_list += f"{player_name} - {status}\n"
             
-            text = f"""👽 **Game Host:** {host_name}
-
-🏏 **Solo Mode**
-
-🎯 **Current Batter:** {batter_name}
-⚾ **Current Bowler:** {bowler_name}
-
-📊 **Players List:**
-{players_list if players_list else '   No players'}"""
+            text = f"👽 **Game Host:** {host_name}\n\n"
+            text += f"🏏 **Solo Mode**\n\n"
+            text += f"🎯 **Current Batter:** {batter_name}\n"
+            text += f"⚾ **Current Bowler:** {bowler_name}\n\n"
+            text += f"📊 **Players List:**\n{players_list if players_list else '   No players'}"
             
             await message.reply(text)
 
@@ -2102,7 +2159,6 @@ def register_handlers(app):
         if text.startswith('/'):
             return
         
-        # Sirf numbers 1-6 accept karo, warna ignore
         if not text.isdigit():
             return
         num = int(text)
@@ -2113,19 +2169,15 @@ def register_handlers(app):
         user_id = message.from_user.id
         print(f"🔴 BATTING MSG - Chat: {chat_id}, User: {user_id}, Text: {text}")
         
-        # ================= TEAM MODE =================
         team_game = team_games.get(chat_id)
         if team_game:
-            # Check if game is in playing state
             if team_game.get("status") != "playing" or team_game.get("game_over"):
                 return
             
-            # Check if bowling number is sent
             if team_game.get("bowling_number") is None:
                 await message.reply("⏳ Wait for bowler to bowl first!")
                 return
             
-            # Check if current batter is the one who sent message
             batter = team_game.get("current_batter")
             if not batter or batter.get("id") != user_id:
                 await message.reply("❌ You are not the current batter!")
@@ -2146,7 +2198,6 @@ def register_handlers(app):
                 await process_runs_team(client, chat_id, batter, bat)
             return
         
-        # ================= SOLO MODE =================
         game = games.get(chat_id)
         if game:
             if game.get("status") != "playing" or game.get("game_over") or game.get("bowling_number") is None:
