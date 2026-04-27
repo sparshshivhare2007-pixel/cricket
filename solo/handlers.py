@@ -1657,7 +1657,8 @@ def register_handlers(app):
                 if game["current_bowler_balls"] >= 6:
                     players = game[team_key]
                     new_bowler_index = (game["current_bowler_index"] + 1) % len(players)
-                    game["current_bowler_index"] = new_bowler_index                    game["current_bowler"] = players[new_bowler_index].copy()
+                    game["current_bowler_index"] = new_bowler_index                    
+                    game["current_bowler"] = players[new_bowler_index].copy()
                     game["current_bowler_balls"] = 0
                 
                 await send_bowling_video_team(client, chat_id, game["current_bowler"])
