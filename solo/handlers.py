@@ -464,7 +464,7 @@ def register_handlers(app):
         batter_clickable = get_clickable_name(batter['id'], batter['name'], batter.get('username'))
         bowler_clickable = get_clickable_name(bowler['id'], bowler['name'], bowler.get('username'))
         
-        await client.send_message(chat_id, f"🎾 Hey {batter_clickable}, now you're batter!", parse_mode=ParseMode.HTML)
+        await client.send_message(chat_id, f"🏏 Hey {batter_clickable}, now you're batter!", parse_mode=ParseMode.HTML)
         await client.send_message(chat_id, f"🎾 Hey {bowler_clickable}, now you're bowling!", parse_mode=ParseMode.HTML)
         
         await asyncio.sleep(1)
