@@ -145,7 +145,7 @@ def register_handlers(app):
           📊 EXTRA COMMANDS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/user_info - Get your user information
+/user_info - Get your user information (reply to get others info)
 /user_ranks - View player rankings
 /members - View team members & player numbers
 /startgame - Start new game (Host)
@@ -260,7 +260,14 @@ def register_handlers(app):
     # ================= USER INFO COMMAND =================
     @app.on_message(filters.command("user_info") & filters.group)
     async def user_info_cmd(client, message: Message):
-        user = message.from_user
+        from pyrogram.enums import ParseMode
+        
+        # Check if replying to a message
+        if message.reply_to_message:
+            user = message.reply_to_message.from_user
+        else:
+            user = message.from_user
+        
         user_id = user.id
         name = user.first_name
         username = user.username
@@ -308,8 +315,14 @@ def register_handlers(app):
     @app.on_message(filters.command("user_ranks") & filters.group)
     async def user_ranks_cmd(client, message: Message):
         from database import get_or_create_user
+        from pyrogram.enums import ParseMode
         
-        user = message.from_user
+        # Check if replying to a message
+        if message.reply_to_message:
+            user = message.reply_to_message.from_user
+        else:
+            user = message.from_user
+        
         user_id = user.id
         name = user.first_name
         username = user.username
@@ -366,6 +379,7 @@ def register_handlers(app):
     @app.on_callback_query(filters.regex("^rank_"))
     async def rank_buttons_handler(client, callback: CallbackQuery):
         from database import get_all_users_stats
+        from pyrogram.enums import ParseMode
         
         action = callback.data.split("_")[1]
         all_users = await get_all_users_stats()
@@ -441,6 +455,7 @@ def register_handlers(app):
     @app.on_callback_query(filters.regex("^back_to_ranks$"))
     async def back_to_ranks_callback(client, callback: CallbackQuery):
         from database import get_or_create_user
+        from pyrogram.enums import ParseMode
         
         user = callback.from_user
         user_id = user.id
@@ -662,7 +677,6 @@ def register_handlers(app):
                 current_timeout = bowler_consecutive_timeouts[chat_id][user_id]
                 
                 if current_timeout >= 2:
-                    # Remove player from game after 2 consecutive timeouts
                     player_removed = False
                     removed_player = None
                     for i, player in enumerate(game["players"]):
@@ -682,10 +696,8 @@ def register_handlers(app):
                         if user_id in bowler_consecutive_timeouts[chat_id]:
                             del bowler_consecutive_timeouts[chat_id][user_id]
                         
-                        # Check if current batter is the removed player
                         current_batter = game.get("current_batter", {})
                         if current_batter.get("id") == user_id:
-                            # Batter was removed, need to select new batter
                             active_players = [p for p in game["players"] if not p.get("out", False)]
                             if len(active_players) == 0:
                                 await client.send_message(chat_id, "🏏 Game ended! No players left!")
@@ -708,7 +720,6 @@ def register_handlers(app):
                                 del games[chat_id]
                             return
                         
-                        # Select new bowler (cannot be the current batter)
                         active_bowlers = [p for p in active_players if p["id"] != game["current_batter"]["id"]]
                         if len(active_bowlers) == 0:
                             active_bowlers = active_players
@@ -719,7 +730,6 @@ def register_handlers(app):
                             await send_bowling_video_solo(client, chat_id, new_bowler)
                         return
                 else:
-                    # First consecutive timeout: deduct 6 runs
                     for player in game["players"]:
                         if player["id"] == user_id:
                             player["score"] -= 6
@@ -745,9 +755,7 @@ def register_handlers(app):
                     game["current_bowler_balls"] += 1
                     game["total_balls_in_match"] += 1
                     
-                    # Check if bowler is also batter (can't happen in solo mode normally)
                     if game["current_bowler"]["id"] == game["current_batter"]["id"]:
-                        # Change bowler if same as batter
                         players = game["players"]
                         current_index = game.get("current_bowler_index", 0)
                         new_index = (current_index + 1) % len(players)
@@ -1882,7 +1890,6 @@ def register_handlers(app):
                             await end_match_team(client, chat_id, winner)
                             return
                         
-                        # Select new bowler (cannot be current batter)
                         current_batter = game.get("current_batter", {})
                         available_bowlers = [p for p in game[team_key] if p["id"] != current_batter.get("id")]
                         
@@ -1925,11 +1932,9 @@ def register_handlers(app):
                     
                     if game["current_bowler_balls"] >= 6:
                         players = game[team_key]
-                        # Ensure new bowler is not same as current batter
                         current_batter = game.get("current_batter", {})
                         new_bowler_index = (game["current_bowler_index"] + 1) % len(players)
                         
-                        # Find a bowler who is not the current batter
                         start_index = new_bowler_index
                         while players[new_bowler_index].get("out", False) or players[new_bowler_index]["id"] == current_batter.get("id"):
                             new_bowler_index = (new_bowler_index + 1) % len(players)
@@ -2175,14 +2180,12 @@ def register_handlers(app):
         current_index = game.get("current_bowler_index", 0)
         new_index = (current_index + 1) % len(players)
         
-        # Ensure new bowler is not the current batter
         current_batter = game.get("current_batter", {})
         start_index = new_index
         
         while (players[new_index].get("out", False) or players[new_index]["id"] == current_batter.get("id")) and new_index != start_index:
             new_index = (new_index + 1) % len(players)
         
-        # If all are out or same as batter, just pick next
         if players[new_index].get("out", False) or players[new_index]["id"] == current_batter.get("id"):
             new_index = (current_index + 1) % len(players)
         
@@ -2476,13 +2479,11 @@ def register_handlers(app):
         game["current_batter_index"] = 0
         game["current_batter"] = players[0].copy()
         
-        # Ensure bowler is not the same as batter
         if len(players) == 1:
             game["current_bowler_index"] = 0
             game["current_bowler"] = players[0].copy()
         else:
             game["current_bowler_index"] = 1 if len(players) > 1 else 0
-            # If bowler index is same as batter, change it
             if game["current_bowler_index"] == game["current_batter_index"]:
                 game["current_bowler_index"] = (game["current_bowler_index"] + 1) % len(players)
             game["current_bowler"] = players[game["current_bowler_index"]].copy()
@@ -2607,7 +2608,6 @@ def register_handlers(app):
                     current_bowler_index = game.get("current_bowler_index", 0)
                     new_bowler_index = (current_bowler_index + 1) % len(players)
                     
-                    # Ensure new bowler is not the current batter
                     while players[new_bowler_index].get("out", False) or players[new_bowler_index]["id"] == game["current_batter"]["id"]:
                         new_bowler_index = (new_bowler_index + 1) % len(players)
                     
