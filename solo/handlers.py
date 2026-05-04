@@ -174,22 +174,17 @@ def register_handlers(app):
         chat_id = message.chat.id
         user_id = message.from_user.id
         
-        # Check if user is admin
         is_admin_user = await is_admin(client, chat_id, user_id)
         
-        # Check for solo game
         solo_game = games.get(chat_id)
         if solo_game and solo_game.get("status") in ["playing", "waiting"]:
             if not is_admin_user:
-                # Check if user is the host of solo game
                 host_id = solo_game.get("host_id")
                 if host_id != user_id:
                     await message.reply("❌ Only admin or game host can end the match!")
                     return
             
-            # End solo game
             if solo_game.get("status") == "playing" and not solo_game.get("game_over"):
-                # Build final scoreboard
                 players = solo_game.get("players", [])
                 final_scoreboard = build_scoreboard(players, is_final=True)
                 
@@ -201,7 +196,6 @@ def register_handlers(app):
                     parse_mode=ParseMode.HTML
                 )
             
-            # Delete solo game
             del games[chat_id]
             if chat_id in bowler_consecutive_timeouts:
                 del bowler_consecutive_timeouts[chat_id]
@@ -215,7 +209,6 @@ def register_handlers(app):
             await message.reply("✅ Solo match has been ended successfully!")
             return
         
-        # Check for team game
         team_game = team_games.get(chat_id)
         if team_game and team_game.get("status") in ["playing", "waiting_host", "team_creation_a", "team_creation_b", "captain_selection", "toss", "waiting_startgame", "over_selection", "waiting_bowler", "waiting_batter"]:
             host = team_hosts.get(chat_id)
@@ -225,7 +218,6 @@ def register_handlers(app):
                     await message.reply("❌ Only admin or game host can end the match!")
                     return
             
-            # Build final result if game was in progress
             if team_game.get("status") == "playing" and not team_game.get("game_over"):
                 team_a_score = team_game.get("team_a_score", 0)
                 team_a_wickets = team_game.get("team_a_wickets", 0)
@@ -248,7 +240,6 @@ def register_handlers(app):
                 
                 await client.send_message(chat_id, final_text)
             
-            # Delete team game
             del team_games[chat_id]
             if chat_id in team_hosts:
                 del team_hosts[chat_id]
@@ -535,7 +526,6 @@ def register_handlers(app):
             game["players"] = []
         
         game["players"].append(player_data)
-        players_count = len(game["players"])
         
         clickable_name = get_clickable_name(user.id, user.first_name, user.username)
         await message.reply(f"✅ {clickable_name} Joined Successfully!", parse_mode=ParseMode.HTML)
@@ -607,8 +597,7 @@ def register_handlers(app):
             parse_mode=ParseMode.HTML
         )
         
-        batter_name = batter.get('name')
-        batter_clickable = get_clickable_name(batter['id'], batter_name, batter.get('username'))
+        batter_clickable = get_clickable_name(batter['id'], batter['name'], batter.get('username'))
         
         try:
             await client.send_message(
@@ -626,10 +615,10 @@ def register_handlers(app):
             except:
                 pass
         
-        task = asyncio.create_task(bowling_timeout_solo(client, chat_id, bowler["id"], bowler_name))
+        task = asyncio.create_task(bowling_timeout_solo(client, chat_id, bowler["id"], bowler_name, bowler_clickable))
         bowling_tasks[chat_id] = task
 
-    async def bowling_timeout_solo(client, chat_id, user_id, bowler_name):
+    async def bowling_timeout_solo(client, chat_id, user_id, bowler_name, bowler_clickable):
         await asyncio.sleep(30)
         game = games.get(chat_id)
         if game and game.get("status") == "playing":
@@ -638,7 +627,8 @@ def register_handlers(app):
                 try:
                     await client.send_message(
                         chat_id,
-                        f"⚠️ Warning: {bowler_name}, you have 30 seconds left to send a number!"
+                        f"⚠️ Warning: {bowler_clickable}, you have 30 seconds left to send a number!",
+                        parse_mode=ParseMode.HTML
                     )
                 except:
                     pass
@@ -651,7 +641,8 @@ def register_handlers(app):
                 try:
                     await client.send_message(
                         chat_id,
-                        f"⚠️ Warning: {bowler_name}, you have 10 seconds left to send a number!"
+                        f"⚠️ Warning: {bowler_clickable}, you have 10 seconds left to send a number!",
+                        parse_mode=ParseMode.HTML
                     )
                 except:
                     pass
@@ -662,7 +653,6 @@ def register_handlers(app):
             current_bowler = game.get("current_bowler", {})
             if current_bowler.get("id") == user_id and game.get("bowling_number") is None:
                 
-                # Initialize consecutive timeout counter
                 if chat_id not in bowler_consecutive_timeouts:
                     bowler_consecutive_timeouts[chat_id] = {}
                 if user_id not in bowler_consecutive_timeouts[chat_id]:
@@ -674,10 +664,10 @@ def register_handlers(app):
                 if current_timeout >= 2:
                     # Remove player from game after 2 consecutive timeouts
                     player_removed = False
-                    removed_player_name = None
+                    removed_player = None
                     for i, player in enumerate(game["players"]):
                         if player["id"] == user_id:
-                            removed_player_name = player.get('name')
+                            removed_player = player
                             game["players"].pop(i)
                             player_removed = True
                             break
@@ -685,29 +675,45 @@ def register_handlers(app):
                     if player_removed:
                         await client.send_message(
                             chat_id,
-                            f"❌ {bowler_name} has been removed from the game due to 2 consecutive timeouts!"
+                            f"❌ {bowler_clickable} has been removed from the game due to 2 consecutive timeouts!",
+                            parse_mode=ParseMode.HTML
                         )
                         
-                        # Clean up timeout counter for removed player
                         if user_id in bowler_consecutive_timeouts[chat_id]:
                             del bowler_consecutive_timeouts[chat_id][user_id]
+                        
+                        # Check if current batter is the removed player
+                        current_batter = game.get("current_batter", {})
+                        if current_batter.get("id") == user_id:
+                            # Batter was removed, need to select new batter
+                            active_players = [p for p in game["players"] if not p.get("out", False)]
+                            if len(active_players) == 0:
+                                await client.send_message(chat_id, "🏏 Game ended! No players left!")
+                                if chat_id in games:
+                                    del games[chat_id]
+                                return
+                            new_batter = active_players[0]
+                            game["current_batter"] = new_batter
+                            new_batter_clickable = get_clickable_name(new_batter['id'], new_batter['name'], new_batter.get('username'))
+                            await client.send_message(chat_id, f"🎾 New batter: {new_batter_clickable}", parse_mode=ParseMode.HTML)
                         
                         active_players = [p for p in game["players"] if not p.get("out", False)]
                         if len(active_players) < 2:
                             await client.send_message(chat_id, "🏏 Game ended due to insufficient players!")
-                            # Announce winner
                             if len(active_players) == 1:
                                 winner = active_players[0]
                                 winner_clickable = get_clickable_name(winner['id'], winner['name'], winner.get('username'))
                                 await client.send_message(chat_id, f"🏆 {winner_clickable} wins the game!", parse_mode=ParseMode.HTML)
                             if chat_id in games:
                                 del games[chat_id]
-                            if chat_id in bowler_consecutive_timeouts:
-                                del bowler_consecutive_timeouts[chat_id]
                             return
                         
-                        # Select new bowler from remaining players
-                        new_bowler = active_players[0] if len(active_players) > 0 else None
+                        # Select new bowler (cannot be the current batter)
+                        active_bowlers = [p for p in active_players if p["id"] != game["current_batter"]["id"]]
+                        if len(active_bowlers) == 0:
+                            active_bowlers = active_players
+                        
+                        new_bowler = active_bowlers[0] if len(active_bowlers) > 0 else active_players[0]
                         if new_bowler:
                             game["current_bowler"] = new_bowler
                             await send_bowling_video_solo(client, chat_id, new_bowler)
@@ -724,7 +730,8 @@ def register_handlers(app):
                         await client.send_video(
                             chat_id,
                             get_run_video(6),
-                            caption=f"No message received from bowler, deducting 6 runs from {bowler_name}'s score. (Consecutive timeout {current_timeout}/2)"
+                            caption=f"No message received from bowler, deducting 6 runs from {bowler_clickable}'s score. (Consecutive timeout {current_timeout}/2)",
+                            parse_mode=ParseMode.HTML
                         )
                     except:
                         await client.send_message(
@@ -737,6 +744,15 @@ def register_handlers(app):
                     game["bowling_number"] = None
                     game["current_bowler_balls"] += 1
                     game["total_balls_in_match"] += 1
+                    
+                    # Check if bowler is also batter (can't happen in solo mode normally)
+                    if game["current_bowler"]["id"] == game["current_batter"]["id"]:
+                        # Change bowler if same as batter
+                        players = game["players"]
+                        current_index = game.get("current_bowler_index", 0)
+                        new_index = (current_index + 1) % len(players)
+                        game["current_bowler_index"] = new_index
+                        game["current_bowler"] = players[new_index].copy()
                     
                     await send_bowling_video_solo(client, chat_id, game["current_bowler"])
         
@@ -1792,10 +1808,10 @@ def register_handlers(app):
             except:
                 pass
         
-        task = asyncio.create_task(bowling_timeout_with_warnings_team(client, chat_id, bowler["id"], bowler['name']))
+        task = asyncio.create_task(bowling_timeout_with_warnings_team(client, chat_id, bowler["id"], bowler['name'], bowler_clickable))
         bowling_tasks[chat_id] = task
 
-    async def bowling_timeout_with_warnings_team(client, chat_id, user_id, bowler_name):
+    async def bowling_timeout_with_warnings_team(client, chat_id, user_id, bowler_name, bowler_clickable):
         await asyncio.sleep(30)
         game = team_games.get(chat_id)
         if game and game.get("status") == "playing":
@@ -1804,7 +1820,8 @@ def register_handlers(app):
                 try:
                     await client.send_message(
                         chat_id,
-                        f"⚠️ Warning: {bowler_name}, you have 30 seconds left to send a number!"
+                        f"⚠️ Warning: {bowler_clickable}, you have 30 seconds left to send a number!",
+                        parse_mode=ParseMode.HTML
                     )
                 except:
                     pass
@@ -1817,7 +1834,8 @@ def register_handlers(app):
                 try:
                     await client.send_message(
                         chat_id,
-                        f"⚠️ Warning: {bowler_name}, you have 10 seconds left to send a number!"
+                        f"⚠️ Warning: {bowler_clickable}, you have 10 seconds left to send a number!",
+                        parse_mode=ParseMode.HTML
                     )
                 except:
                     pass
@@ -1852,7 +1870,8 @@ def register_handlers(app):
                     if player_removed:
                         await client.send_message(
                             chat_id,
-                            f"❌ {bowler_name} has been removed from the game due to 2 consecutive timeouts!"
+                            f"❌ {bowler_clickable} has been removed from the game due to 2 consecutive timeouts!",
+                            parse_mode=ParseMode.HTML
                         )
                         
                         if user_id in bowler_consecutive_timeouts[chat_id]:
@@ -1863,7 +1882,14 @@ def register_handlers(app):
                             await end_match_team(client, chat_id, winner)
                             return
                         
-                        new_bowler = game[team_key][0].copy() if len(game[team_key]) > 0 else None
+                        # Select new bowler (cannot be current batter)
+                        current_batter = game.get("current_batter", {})
+                        available_bowlers = [p for p in game[team_key] if p["id"] != current_batter.get("id")]
+                        
+                        if len(available_bowlers) == 0:
+                            available_bowlers = game[team_key]
+                        
+                        new_bowler = available_bowlers[0].copy() if len(available_bowlers) > 0 else game[team_key][0].copy()
                         if new_bowler:
                             game["current_bowler"] = new_bowler
                             game["current_bowler_index"] = 0
@@ -1899,7 +1925,17 @@ def register_handlers(app):
                     
                     if game["current_bowler_balls"] >= 6:
                         players = game[team_key]
+                        # Ensure new bowler is not same as current batter
+                        current_batter = game.get("current_batter", {})
                         new_bowler_index = (game["current_bowler_index"] + 1) % len(players)
+                        
+                        # Find a bowler who is not the current batter
+                        start_index = new_bowler_index
+                        while players[new_bowler_index].get("out", False) or players[new_bowler_index]["id"] == current_batter.get("id"):
+                            new_bowler_index = (new_bowler_index + 1) % len(players)
+                            if new_bowler_index == start_index:
+                                break
+                        
                         game["current_bowler_index"] = new_bowler_index                    
                         game["current_bowler"] = players[new_bowler_index].copy()
                         game["current_bowler_balls"] = 0
@@ -2139,8 +2175,16 @@ def register_handlers(app):
         current_index = game.get("current_bowler_index", 0)
         new_index = (current_index + 1) % len(players)
         
-        while players[new_index].get("out", False) and new_index != current_index:
+        # Ensure new bowler is not the current batter
+        current_batter = game.get("current_batter", {})
+        start_index = new_index
+        
+        while (players[new_index].get("out", False) or players[new_index]["id"] == current_batter.get("id")) and new_index != start_index:
             new_index = (new_index + 1) % len(players)
+        
+        # If all are out or same as batter, just pick next
+        if players[new_index].get("out", False) or players[new_index]["id"] == current_batter.get("id"):
+            new_index = (current_index + 1) % len(players)
         
         game["current_bowler_index"] = new_index
         game["current_bowler"] = players[new_index].copy()
@@ -2432,11 +2476,15 @@ def register_handlers(app):
         game["current_batter_index"] = 0
         game["current_batter"] = players[0].copy()
         
+        # Ensure bowler is not the same as batter
         if len(players) == 1:
             game["current_bowler_index"] = 0
             game["current_bowler"] = players[0].copy()
         else:
             game["current_bowler_index"] = 1 if len(players) > 1 else 0
+            # If bowler index is same as batter, change it
+            if game["current_bowler_index"] == game["current_batter_index"]:
+                game["current_bowler_index"] = (game["current_bowler_index"] + 1) % len(players)
             game["current_bowler"] = players[game["current_bowler_index"]].copy()
         
         game["current_bowler_balls"] = 0
@@ -2559,7 +2607,8 @@ def register_handlers(app):
                     current_bowler_index = game.get("current_bowler_index", 0)
                     new_bowler_index = (current_bowler_index + 1) % len(players)
                     
-                    while players[new_bowler_index].get("out", False) and new_bowler_index != current_bowler_index:
+                    # Ensure new bowler is not the current batter
+                    while players[new_bowler_index].get("out", False) or players[new_bowler_index]["id"] == game["current_batter"]["id"]:
                         new_bowler_index = (new_bowler_index + 1) % len(players)
                     
                     game["current_bowler_index"] = new_bowler_index
