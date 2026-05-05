@@ -190,9 +190,7 @@ def register_handlers(app):
                 
                 await client.send_message(
                     chat_id,
-                    f"🏏 **Match Ended by Admin/Host!** 🏏\n\n"
-                    f"{final_scoreboard}\n\n"
-                    f"⚠️ Match has been forcibly ended!",
+                    final_scoreboard,
                     parse_mode=ParseMode.HTML
                 )
             
@@ -2584,7 +2582,7 @@ def register_handlers(app):
                 all_players = game["players"]
                 active_players = [p for p in all_players if not p.get("out", False)]
                 
-                # IMPORTANT: For 2 players game, when one is out, swap roles
+                # IMPORTANT: For 2 players game, when one is out, swap roles and continue
                 if len(active_players) == 1:
                     # Only one player left (the bowler)
                     # Swap roles: remaining player becomes batter, out player becomes bowler
@@ -2610,7 +2608,7 @@ def register_handlers(app):
                         # Show scoreboard
                         await client.send_message(chat_id, build_scoreboard(all_players, is_final=False))
                         
-                        # Continue game with new roles
+                        # Continue game with new roles - send bowling video to new bowler
                         await send_bowling_video_solo(client, chat_id, game["current_bowler"])
                         return
                 
