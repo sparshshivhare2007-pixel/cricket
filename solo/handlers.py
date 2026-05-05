@@ -2572,6 +2572,7 @@ def register_handlers(app):
                 except:
                     await message.reply(f"❌ Out {batter_clickable}")
                 
+                # Mark current batter as out
                 for p in game["players"]:
                     if p["id"] == batter["id"]:
                         p["out"] = True
@@ -2579,45 +2580,87 @@ def register_handlers(app):
                 
                 game["wickets"] = game.get("wickets", 0) + 1
                 
-                active_players = [p for p in game["players"] if not p.get("out", False)]
+                # Get all players
+                all_players = game["players"]
+                active_players = [p for p in all_players if not p.get("out", False)]
                 
-                if len(active_players) == 0 or game.get("game_over"):
-                    await message.reply(build_scoreboard(game["players"], is_final=True))
+                # IMPORTANT: For 2 players game, when one is out, swap roles
+                if len(active_players) == 1:
+                    # Only one player left (the bowler)
+                    # Swap roles: remaining player becomes batter, out player becomes bowler
+                    remaining_player = active_players[0]
+                    out_player = None
+                    for p in all_players:
+                        if p.get("out", False):
+                            out_player = p
+                            break
+                    
+                    if remaining_player and out_player:
+                        # Remaining player becomes batter
+                        game["current_batter"] = remaining_player
+                        # Out player becomes bowler (still out but can bowl)
+                        game["current_bowler"] = out_player
+                        game["current_bowler_balls"] = 0
+                        
+                        remaining_clickable = get_clickable_name(remaining_player['id'], remaining_player['name'], remaining_player.get('username'))
+                        out_clickable = get_clickable_name(out_player['id'], out_player['name'], out_player.get('username'))
+                        
+                        await client.send_message(chat_id, f"🔄 Roles Swapped!\n🏏 New Batter: {remaining_clickable}\n🎾 New Bowler: {out_clickable}", parse_mode=ParseMode.HTML)
+                        
+                        # Show scoreboard
+                        await client.send_message(chat_id, build_scoreboard(all_players, is_final=False))
+                        
+                        # Continue game with new roles
+                        await send_bowling_video_solo(client, chat_id, game["current_bowler"])
+                        return
+                
+                # If no active players left, game over
+                if len(active_players) == 0:
+                    final_scoreboard = build_scoreboard(all_players, is_final=True)
+                    await client.send_message(chat_id, final_scoreboard, parse_mode=ParseMode.HTML)
                     if chat_id in games:
                         del games[chat_id]
                     if chat_id in bowler_consecutive_timeouts:
                         del bowler_consecutive_timeouts[chat_id]
                     return
                 
-                await message.reply(build_scoreboard(game["players"], is_final=False))
+                # Normal case: more than 1 player left, find next batter
+                await client.send_message(chat_id, build_scoreboard(all_players, is_final=False))
                 
+                # Find next batter (not out and not current bowler if possible)
                 next_batter = None
-                for p in game["players"]:
-                    if not p.get("out", False):
+                for p in all_players:
+                    if not p.get("out", False) and p["id"] != bowler["id"]:
                         next_batter = p
                         break
+                
+                if next_batter is None:
+                    # All remaining players are bowlers? Just pick first active
+                    for p in all_players:
+                        if not p.get("out", False):
+                            next_batter = p
+                            break
                 
                 if next_batter:
                     game["current_batter"] = next_batter
                     next_batter_clickable = get_clickable_name(next_batter['id'], next_batter['name'], next_batter.get('username'))
                     await client.send_message(chat_id, f"🎾 Next Batsman: {next_batter_clickable}", parse_mode=ParseMode.HTML)
                     
-                    players = game["players"]
-                    current_bowler_index = game.get("current_bowler_index", 0)
-                    new_bowler_index = (current_bowler_index + 1) % len(players)
+                    # Select new bowler (different from new batter)
+                    active_bowlers = [p for p in all_players if not p.get("out", False) and p["id"] != next_batter["id"]]
+                    if len(active_bowlers) == 0:
+                        active_bowlers = [p for p in all_players if not p.get("out", False)]
                     
-                    while players[new_bowler_index].get("out", False) or players[new_bowler_index]["id"] == game["current_batter"]["id"]:
-                        new_bowler_index = (new_bowler_index + 1) % len(players)
-                    
-                    game["current_bowler_index"] = new_bowler_index
-                    game["current_bowler"] = players[new_bowler_index].copy()
+                    new_bowler = active_bowlers[0] if active_bowlers else all_players[0]
+                    game["current_bowler"] = new_bowler
                     game["current_bowler_balls"] = 0
                     
-                    new_bowler_clickable = get_clickable_name(game["current_bowler"]['id'], game["current_bowler"]['name'], game["current_bowler"].get('username'))
+                    new_bowler_clickable = get_clickable_name(new_bowler['id'], new_bowler['name'], new_bowler.get('username'))
                     await client.send_message(chat_id, f"⚾ New bowler: {new_bowler_clickable}", parse_mode=ParseMode.HTML)
                     await send_bowling_video_solo(client, chat_id, game["current_bowler"])
                 else:
-                    await message.reply(build_scoreboard(game["players"], is_final=True))
+                    final_scoreboard = build_scoreboard(all_players, is_final=True)
+                    await client.send_message(chat_id, final_scoreboard, parse_mode=ParseMode.HTML)
                     if chat_id in games:
                         del games[chat_id]
                     if chat_id in bowler_consecutive_timeouts:
@@ -2631,14 +2674,17 @@ def register_handlers(app):
                 
                 game["current_bowler_balls"] = game.get("current_bowler_balls", 0) + 1
                 
+                # Check if over complete (6 balls)
                 if game["current_bowler_balls"] >= 6:
-                    active_players = [p for p in game["players"] if not p.get("out", False)]
-                    current_batter_id = game["current_batter"]["id"]
-                    active_bowlers = [p for p in active_players if p["id"] != current_batter_id]
+                    all_players = game["players"]
+                    current_batter = game["current_batter"]
                     
+                    # Find new bowler (different from current batter)
+                    active_bowlers = [p for p in all_players if not p.get("out", False) and p["id"] != current_batter["id"]]
                     if len(active_bowlers) == 0:
-                        active_bowlers = active_players
+                        active_bowlers = [p for p in all_players if not p.get("out", False)]
                     
+                    # Rotate to next bowler
                     current_bowler_id = game["current_bowler"]["id"]
                     new_bowler = None
                     
@@ -2653,10 +2699,6 @@ def register_handlers(app):
                     
                     if new_bowler:
                         game["current_bowler"] = new_bowler
-                        for i, p in enumerate(game["players"]):
-                            if p["id"] == new_bowler["id"]:
-                                game["current_bowler_index"] = i
-                                break
                         game["current_bowler_balls"] = 0
                         
                         new_bowler_clickable = get_clickable_name(new_bowler['id'], new_bowler['name'], new_bowler.get('username'))
