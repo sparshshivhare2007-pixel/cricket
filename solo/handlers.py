@@ -87,6 +87,15 @@ def register_handlers(app):
         chat_id = message.chat.id
         user_id = message.from_user.id
         
+        # Check if game already running
+        if chat_id in games and games[chat_id].get("status") in ["playing", "waiting"]:
+            await message.reply("❌ A game is already running in this group! Use /end_match to end it first.")
+            return
+        
+        if chat_id in team_games and team_games[chat_id].get("status") in ["playing", "waiting_host", "team_creation_a", "team_creation_b", "captain_selection", "toss", "waiting_startgame", "over_selection", "waiting_bowler", "waiting_batter"]:
+            await message.reply("❌ A team game is already running in this group! Use /end_match to end it first.")
+            return
+        
         if await is_admin(client, chat_id, user_id):
             await select_game_menu(client, message)
         else:
@@ -816,6 +825,11 @@ def register_handlers(app):
         ball_mode = int(callback.data.split("_")[1])
         chat_id = callback.message.chat.id
         
+        # Check if game already exists
+        if chat_id in games:
+            await callback.answer("❌ A game is already running in this group!", show_alert=True)
+            return
+        
         create_game(chat_id)
         game = games[chat_id]
         game["ball_mode"] = ball_mode
@@ -865,6 +879,11 @@ def register_handlers(app):
     # ================= TEAM MODE START =================
     async def team_mode_start(client, callback):
         chat_id = callback.message.chat.id
+        
+        # Check if game already exists
+        if chat_id in team_games:
+            await callback.answer("❌ A team game is already running in this group!", show_alert=True)
+            return
         
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("👑 I'm the Host", callback_data="team_become_host")]
@@ -2596,7 +2615,7 @@ def register_handlers(app):
                     if remaining_player and out_player:
                         # Remaining player becomes batter
                         game["current_batter"] = remaining_player
-                        # Out player becomes bowler (still out but can bowl)
+                        # Out player becomes bowler (still out can bowl)
                         game["current_bowler"] = out_player
                         game["current_bowler_balls"] = 0
                         
@@ -2606,10 +2625,10 @@ def register_handlers(app):
                         await client.send_message(chat_id, f"🔄 Roles Swapped!\n🏏 New Batter: {remaining_clickable}\n🎾 New Bowler: {out_clickable}", parse_mode=ParseMode.HTML)
                         
                         # Show scoreboard
-                        await client.send_message(chat_id, build_scoreboard(all_players, is_final=False))
+                        await client.send_message(chat_id, build_scoreboard(all_players, is_final=False), parse_mode=ParseMode.HTML)
                         
-                        # Continue game with new roles - send bowling video to new bowler
-                        await send_bowling_video_solo(client, chat_id, game["current_bowler"])
+                        # Send bowling video to new bowler
+                        await send_bowling_video_solo(client, chat_id, out_player)
                         return
                 
                 # If no active players left, game over
@@ -2622,10 +2641,10 @@ def register_handlers(app):
                         del bowler_consecutive_timeouts[chat_id]
                     return
                 
-                # Normal case: more than 1 player left, find next batter
-                await client.send_message(chat_id, build_scoreboard(all_players, is_final=False))
+                # Show updated scoreboard
+                await client.send_message(chat_id, build_scoreboard(all_players, is_final=False), parse_mode=ParseMode.HTML)
                 
-                # Find next batter (not out and not current bowler if possible)
+                # Find next batter
                 next_batter = None
                 for p in all_players:
                     if not p.get("out", False) and p["id"] != bowler["id"]:
@@ -2633,7 +2652,6 @@ def register_handlers(app):
                         break
                 
                 if next_batter is None:
-                    # All remaining players are bowlers? Just pick first active
                     for p in all_players:
                         if not p.get("out", False):
                             next_batter = p
@@ -2644,7 +2662,7 @@ def register_handlers(app):
                     next_batter_clickable = get_clickable_name(next_batter['id'], next_batter['name'], next_batter.get('username'))
                     await client.send_message(chat_id, f"🎾 Next Batsman: {next_batter_clickable}", parse_mode=ParseMode.HTML)
                     
-                    # Select new bowler (different from new batter)
+                    # Select new bowler
                     active_bowlers = [p for p in all_players if not p.get("out", False) and p["id"] != next_batter["id"]]
                     if len(active_bowlers) == 0:
                         active_bowlers = [p for p in all_players if not p.get("out", False)]
@@ -2665,6 +2683,7 @@ def register_handlers(app):
                         del bowler_consecutive_timeouts[chat_id]
                 return
             else:
+                # Not out - add runs
                 try:
                     await message.reply_video(get_run_video(result["runs"]))
                 except:
@@ -2677,7 +2696,7 @@ def register_handlers(app):
                     all_players = game["players"]
                     current_batter = game["current_batter"]
                     
-                    # Find new bowler (different from current batter)
+                    # Find new bowler
                     active_bowlers = [p for p in all_players if not p.get("out", False) and p["id"] != current_batter["id"]]
                     if len(active_bowlers) == 0:
                         active_bowlers = [p for p in all_players if not p.get("out", False)]
