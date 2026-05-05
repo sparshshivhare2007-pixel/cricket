@@ -262,7 +262,6 @@ def register_handlers(app):
     async def user_info_cmd(client, message: Message):
         from pyrogram.enums import ParseMode
         
-        # Check if replying to a message
         if message.reply_to_message:
             user = message.reply_to_message.from_user
         else:
@@ -317,7 +316,6 @@ def register_handlers(app):
         from database import get_or_create_user
         from pyrogram.enums import ParseMode
         
-        # Check if replying to a message
         if message.reply_to_message:
             user = message.reply_to_message.from_user
         else:
@@ -2629,10 +2627,43 @@ def register_handlers(app):
                 try:
                     await message.reply_video(get_run_video(result["runs"]))
                 except:
-                    await message.reply_video(get_run_video(result["runs"]))
+                    await message.reply(f"🏏 {result['runs']} runs!")
+                
+                game["current_bowler_balls"] = game.get("current_bowler_balls", 0) + 1
+                
+                if game["current_bowler_balls"] >= 6:
+                    active_players = [p for p in game["players"] if not p.get("out", False)]
+                    current_batter_id = game["current_batter"]["id"]
+                    active_bowlers = [p for p in active_players if p["id"] != current_batter_id]
+                    
+                    if len(active_bowlers) == 0:
+                        active_bowlers = active_players
+                    
+                    current_bowler_id = game["current_bowler"]["id"]
+                    new_bowler = None
+                    
+                    for i, p in enumerate(active_bowlers):
+                        if p["id"] == current_bowler_id:
+                            next_idx = (i + 1) % len(active_bowlers)
+                            new_bowler = active_bowlers[next_idx]
+                            break
+                    
+                    if new_bowler is None and len(active_bowlers) > 0:
+                        new_bowler = active_bowlers[0]
+                    
+                    if new_bowler:
+                        game["current_bowler"] = new_bowler
+                        for i, p in enumerate(game["players"]):
+                            if p["id"] == new_bowler["id"]:
+                                game["current_bowler_index"] = i
+                                break
+                        game["current_bowler_balls"] = 0
+                        
+                        new_bowler_clickable = get_clickable_name(new_bowler['id'], new_bowler['name'], new_bowler.get('username'))
+                        await client.send_message(chat_id, f"🔄 Over complete! New bowler: {new_bowler_clickable}", parse_mode=ParseMode.HTML)
                 
                 if not game.get("game_over"):
-                    await send_bowling_video_solo(client, chat_id, bowler)
+                    await send_bowling_video_solo(client, chat_id, game["current_bowler"])
             return
 
     # ================= VOTE SYSTEM =================
