@@ -87,7 +87,6 @@ def register_handlers(app):
         chat_id = message.chat.id
         user_id = message.from_user.id
         
-        # Check if game already running
         if chat_id in games and games[chat_id].get("status") in ["playing", "waiting"]:
             await message.reply("❌ A game is already running in this group! Use /end_match to end it first.")
             return
@@ -177,7 +176,7 @@ def register_handlers(app):
         
         await message.reply(help_text)
 
-    # ================= END MATCH COMMAND =================
+    # ================= END MATCH COMMAND WITH CONFIRMATION =================
     @app.on_message(filters.command("end_match") & filters.group)
     async def end_match_cmd(client, message: Message):
         chat_id = message.chat.id
@@ -186,20 +185,93 @@ def register_handlers(app):
         is_admin_user = await is_admin(client, chat_id, user_id)
         
         solo_game = games.get(chat_id)
-        if solo_game and solo_game.get("status") in ["playing", "waiting"]:
-            if not is_admin_user:
+        team_game = team_games.get(chat_id)
+        
+        if not solo_game and not team_game:
+            await message.reply("❌ No active match found in this group!")
+            return
+        
+        is_authorized = False
+        
+        if solo_game:
+            if is_admin_user:
+                is_authorized = True
+            else:
                 host_id = solo_game.get("host_id")
-                if host_id != user_id:
-                    await message.reply("❌ Only admin or game host can end the match!")
-                    return
-            
+                if host_id == user_id:
+                    is_authorized = True
+        
+        if team_game:
+            if is_admin_user:
+                is_authorized = True
+            else:
+                host = team_hosts.get(chat_id)
+                if host and host.get("id") == user_id:
+                    is_authorized = True
+        
+        if not is_authorized:
+            await message.reply("❌ Only admin or game host can end the match!")
+            return
+        
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ YES, End Match", callback_data=f"end_confirm_{chat_id}"),
+                InlineKeyboardButton("❌ NO, Cancel", callback_data=f"end_cancel_{chat_id}")
+            ]
+        ])
+        
+        game_type = "Solo" if solo_game else "Team"
+        await message.reply(
+            f"⚠️ **Are you sure you want to end this {game_type} match?**\n\n"
+            f"This action cannot be undone!\n\n"
+            f"Click YES to end the match or NO to continue playing.",
+            reply_markup=keyboard
+        )
+
+    @app.on_callback_query(filters.regex("^end_confirm_"))
+    async def end_confirm_callback(client, callback: CallbackQuery):
+        chat_id = int(callback.data.split("_")[2])
+        user_id = callback.from_user.id
+        
+        is_admin_user = await is_admin(client, chat_id, user_id)
+        
+        solo_game = games.get(chat_id)
+        team_game = team_games.get(chat_id)
+        
+        is_authorized = False
+        
+        if solo_game:
+            if is_admin_user:
+                is_authorized = True
+            else:
+                host_id = solo_game.get("host_id")
+                if host_id == user_id:
+                    is_authorized = True
+        
+        if team_game:
+            if is_admin_user:
+                is_authorized = True
+            else:
+                host = team_hosts.get(chat_id)
+                if host and host.get("id") == user_id:
+                    is_authorized = True
+        
+        if not is_authorized:
+            await callback.answer("❌ You are not authorized to end this match!", show_alert=True)
+            await callback.message.delete()
+            return
+        
+        await callback.message.delete()
+        
+        if solo_game:
             if solo_game.get("status") == "playing" and not solo_game.get("game_over"):
                 players = solo_game.get("players", [])
                 final_scoreboard = build_scoreboard(players, is_final=True)
                 
                 await client.send_message(
                     chat_id,
-                    final_scoreboard,
+                    f"🏏 **Match Ended by {callback.from_user.first_name}** 🏏\n\n"
+                    f"{final_scoreboard}",
                     parse_mode=ParseMode.HTML
                 )
             
@@ -213,25 +285,18 @@ def register_handlers(app):
                     pass
                 del bowling_tasks[chat_id]
             
-            await message.reply("✅ Solo match has been ended successfully!")
+            await client.send_message(chat_id, "✅ Solo match has been ended successfully!")
+            await callback.answer("Match ended!")
             return
         
-        team_game = team_games.get(chat_id)
-        if team_game and team_game.get("status") in ["playing", "waiting_host", "team_creation_a", "team_creation_b", "captain_selection", "toss", "waiting_startgame", "over_selection", "waiting_bowler", "waiting_batter"]:
-            host = team_hosts.get(chat_id)
-            
-            if not is_admin_user:
-                if not host or host.get("id") != user_id:
-                    await message.reply("❌ Only admin or game host can end the match!")
-                    return
-            
+        if team_game:
             if team_game.get("status") == "playing" and not team_game.get("game_over"):
                 team_a_score = team_game.get("team_a_score", 0)
                 team_a_wickets = team_game.get("team_a_wickets", 0)
                 team_b_score = team_game.get("team_b_score", 0)
                 team_b_wickets = team_game.get("team_b_wickets", 0)
                 
-                final_text = f"🏏 **Match Ended by Admin/Host!** 🏏\n\n"
+                final_text = f"🏏 **Match Ended by {callback.from_user.first_name}!** 🏏\n\n"
                 final_text += f"📊 **Final Score:**\n"
                 final_text += f"🏏 Team A: {team_a_score}/{team_a_wickets}\n"
                 final_text += f"🏏 Team B: {team_b_score}/{team_b_wickets}\n\n"
@@ -259,10 +324,14 @@ def register_handlers(app):
                     pass
                 del bowling_tasks[chat_id]
             
-            await message.reply("✅ Team match has been ended successfully!")
+            await client.send_message(chat_id, "✅ Team match has been ended successfully!")
+            await callback.answer("Match ended!")
             return
-        
-        await message.reply("❌ No active match found in this group!")
+
+    @app.on_callback_query(filters.regex("^end_cancel_"))
+    async def end_cancel_callback(client, callback: CallbackQuery):
+        await callback.message.delete()
+        await callback.answer("❌ Match end cancelled! Game continues.", show_alert=True)
 
     # ================= USER INFO COMMAND =================
     @app.on_message(filters.command("user_info") & filters.group)
@@ -2643,12 +2712,16 @@ def register_handlers(app):
                                 next_batter = p
                                 break
                     
+                    # CRITICAL FIX: Solo mode mein bowler change mat karo
+                    # Sirf next batter set karo, bowler same rahega
                     if next_batter:
                         game["current_batter"] = next_batter
                         game["current_bowler_balls"] = 0
                         
                         next_batter_clickable = get_clickable_name(next_batter['id'], next_batter['name'], next_batter.get('username'))
                         await client.send_message(chat_id, f"🎾 Next Batsman: {next_batter_clickable}", parse_mode=ParseMode.HTML)
+                        
+                        # Same bowler continue karega - BOWLER CHANGE NHI HOGA
                         await send_bowling_video_solo(client, chat_id, game["current_bowler"])
                     else:
                         final_scoreboard = build_scoreboard(all_players, is_final=True)
@@ -2682,33 +2755,8 @@ def register_handlers(app):
                 
                 await client.send_message(chat_id, build_scoreboard(game["players"], is_final=False), parse_mode=ParseMode.HTML)
                 
-                ball_mode = game.get("ball_mode", 3)
-                if game["current_bowler_balls"] >= ball_mode:
-                    all_players = game["players"]
-                    current_batter = game["current_batter"]
-                    
-                    active_bowlers = [p for p in all_players if not p.get("out", False) and p["id"] != current_batter["id"]]
-                    if len(active_bowlers) == 0:
-                        active_bowlers = [p for p in all_players if not p.get("out", False)]
-                    
-                    current_bowler_id = game["current_bowler"]["id"]
-                    new_bowler = None
-                    
-                    for i, p in enumerate(active_bowlers):
-                        if p["id"] == current_bowler_id:
-                            next_idx = (i + 1) % len(active_bowlers)
-                            new_bowler = active_bowlers[next_idx]
-                            break
-                    
-                    if new_bowler is None and len(active_bowlers) > 0:
-                        new_bowler = active_bowlers[0]
-                    
-                    if new_bowler:
-                        game["current_bowler"] = new_bowler
-                        game["current_bowler_balls"] = 0
-                        
-                        new_bowler_clickable = get_clickable_name(new_bowler['id'], new_bowler['name'], new_bowler.get('username'))
-                        await client.send_message(chat_id, f"🔄 {ball_mode} balls complete! New bowler: {new_bowler_clickable}", parse_mode=ParseMode.HTML)
+                # SOLO MODE: BOWLER CHANGE NHI HOGA - Sirf ball count increase hoga
+                # Koi bowler change code nahi hai yahan - intentionally removed
                 
                 if not game.get("game_over"):
                     await send_bowling_video_solo(client, chat_id, game["current_bowler"])
