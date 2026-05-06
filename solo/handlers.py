@@ -2496,9 +2496,9 @@ def register_handlers(app):
             text += f"📊 **Players List:**\n{players_list if players_list else '   No players'}"
             
             await message.reply(text, parse_mode=ParseMode.HTML)
-
+    
     # ================= START TEAM BATTING =================
-    async def start_team_batting(client, chat_id, team):
+     async def start_team_batting(client, chat_id, team):
         print(f"🔴 START_TEAM_BATTING - Chat: {chat_id}, Team: {team}")
         game = team_games.get(chat_id)
         if not game:
@@ -2540,9 +2540,9 @@ def register_handlers(app):
         await client.send_message(chat_id, f"🏏 **Team {team} Batting**\n\nBatter: {batter_clickable}\nBowler: {bowler_clickable}", parse_mode=ParseMode.HTML)
         await send_bowling_video_team(client, chat_id, game["current_bowler"])
 
-    # ================= BATTING (group message) - SOLO MODE FIXED =================
-@app.on_message(filters.group & filters.text & ~filters.bot)
-async def batting_msg(client, message: Message):
+# ================= BATTING (group message) - SOLO MODE FIXED =================
+   @app.on_message(filters.group & filters.text & ~filters.bot)
+   async def batting_msg(client, message: Message):
     text = message.text.strip()
     
     if text.startswith('/'):
@@ -2765,8 +2765,7 @@ async def batting_msg(client, message: Message):
         return
         
     # ================= VOTE SYSTEM =================
-    
-    async def vote_system(client, message):
+     async def vote_system(client, message):
         chat_id = message.chat.id
         
         if chat_id in active_votes and active_votes[chat_id].get("active"):
