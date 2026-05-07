@@ -263,6 +263,14 @@ def register_handlers(app):
         
         await callback.message.delete()
         
+        # Cancel all pending tasks FIRST
+        if chat_id in bowling_tasks:
+            try:
+                bowling_tasks[chat_id].cancel()
+            except:
+                pass
+            del bowling_tasks[chat_id]
+        
         if solo_game:
             if solo_game.get("status") == "playing" and not solo_game.get("game_over"):
                 players = solo_game.get("players", [])
@@ -275,15 +283,10 @@ def register_handlers(app):
                     parse_mode=ParseMode.HTML
                 )
             
-            del games[chat_id]
+            if chat_id in games:
+                del games[chat_id]
             if chat_id in bowler_consecutive_timeouts:
                 del bowler_consecutive_timeouts[chat_id]
-            if chat_id in bowling_tasks:
-                try:
-                    bowling_tasks[chat_id].cancel()
-                except:
-                    pass
-                del bowling_tasks[chat_id]
             
             await client.send_message(chat_id, "✅ Solo match has been ended successfully!")
             await callback.answer("Match ended!")
@@ -312,17 +315,12 @@ def register_handlers(app):
                 
                 await client.send_message(chat_id, final_text)
             
-            del team_games[chat_id]
+            if chat_id in team_games:
+                del team_games[chat_id]
             if chat_id in team_hosts:
                 del team_hosts[chat_id]
             if chat_id in bowler_consecutive_timeouts:
                 del bowler_consecutive_timeouts[chat_id]
-            if chat_id in bowling_tasks:
-                try:
-                    bowling_tasks[chat_id].cancel()
-                except:
-                    pass
-                del bowling_tasks[chat_id]
             
             await client.send_message(chat_id, "✅ Team match has been ended successfully!")
             await callback.answer("Match ended!")
@@ -638,6 +636,10 @@ def register_handlers(app):
         game = games[chat_id]
         players = game["players"]
         
+        # Initialize bowler order list for round-robin (all players initially)
+        game["bowler_order"] = [p["id"] for p in players]
+        game["current_bowler_index_in_order"] = 0
+        
         host_text = "🏏 **SOLO CRICKET** 🏏\n\n**Players List:**\n"
         for i, p in enumerate(players, 1):
             clickable = get_clickable_name(p['id'], p['name'], p.get('username'))
@@ -770,6 +772,10 @@ def register_handlers(app):
                         if user_id in bowler_consecutive_timeouts[chat_id]:
                             del bowler_consecutive_timeouts[chat_id][user_id]
                         
+                        # Remove from bowler order
+                        if "bowler_order" in game and user_id in game["bowler_order"]:
+                            game["bowler_order"].remove(user_id)
+                        
                         current_batter = game.get("current_batter", {})
                         if current_batter.get("id") == user_id:
                             active_players = [p for p in game["players"] if not p.get("out", False)]
@@ -794,14 +800,8 @@ def register_handlers(app):
                                 del games[chat_id]
                             return
                         
-                        active_bowlers = [p for p in active_players if p["id"] != game["current_batter"]["id"]]
-                        if len(active_bowlers) == 0:
-                            active_bowlers = active_players
-                        
-                        new_bowler = active_bowlers[0] if len(active_bowlers) > 0 else active_players[0]
-                        if new_bowler:
-                            game["current_bowler"] = new_bowler
-                            await send_bowling_video_solo(client, chat_id, new_bowler)
+                        # Select next bowler from order
+                        await select_next_bowler_round_robin(client, chat_id)
                         return
                 else:
                     for player in game["players"]:
@@ -829,17 +829,86 @@ def register_handlers(app):
                     game["current_bowler_balls"] += 1
                     game["total_balls_in_match"] += 1
                     
-                    if game["current_bowler"]["id"] == game["current_batter"]["id"]:
-                        players = game["players"]
-                        current_index = game.get("current_bowler_index", 0)
-                        new_index = (current_index + 1) % len(players)
-                        game["current_bowler_index"] = new_index
-                        game["current_bowler"] = players[new_index].copy()
-                    
-                    await send_bowling_video_solo(client, chat_id, game["current_bowler"])
+                    # Check if over complete
+                    ball_mode = game.get("ball_mode", 3)
+                    if game["current_bowler_balls"] >= ball_mode:
+                        await select_next_bowler_round_robin(client, chat_id)
+                    else:
+                        await send_bowling_video_solo(client, chat_id, game["current_bowler"])
         
         if chat_id in bowling_tasks:
             del bowling_tasks[chat_id]
+
+    # ================= ROUND-ROBIN BOWLER SELECTION =================
+    async def select_next_bowler_round_robin(client, chat_id):
+        game = games.get(chat_id)
+        if not game:
+            return
+        
+        all_players = game["players"]
+        current_batter = game["current_batter"]
+        current_bowler_id = game["current_bowler"]["id"]
+        
+        # Initialize or update bowler order list (exclude current batter, include only active players)
+        if "bowler_order" not in game or len(game["bowler_order"]) == 0:
+            game["bowler_order"] = [p["id"] for p in all_players if not p.get("out", False) and p["id"] != current_batter["id"]]
+            if len(game["bowler_order"]) == 0:
+                game["bowler_order"] = [p["id"] for p in all_players if not p.get("out", False)]
+            game["current_bowler_index_in_order"] = 0
+        
+        # Remove current bowler from order (he just completed his over)
+        if current_bowler_id in game["bowler_order"]:
+            # Find index of current bowler
+            current_idx = -1
+            for i, bid in enumerate(game["bowler_order"]):
+                if bid == current_bowler_id:
+                    current_idx = i
+                    break
+            
+            # Move to next bowler
+            next_idx = (current_idx + 1) % len(game["bowler_order"])
+            next_bowler_id = game["bowler_order"][next_idx]
+            game["current_bowler_index_in_order"] = next_idx
+        else:
+            # If current bowler not in order, just take first
+            next_bowler_id = game["bowler_order"][0]
+            game["current_bowler_index_in_order"] = 0
+        
+        # Find next bowler player object
+        next_bowler = None
+        for p in all_players:
+            if p["id"] == next_bowler_id and not p.get("out", False):
+                next_bowler = p
+                break
+        
+        # If next bowler is invalid, find any valid bowler
+        if next_bowler is None or next_bowler.get("out", False) or next_bowler["id"] == current_batter["id"]:
+            # Rebuild bowler order excluding current batter
+            game["bowler_order"] = [p["id"] for p in all_players if not p.get("out", False) and p["id"] != current_batter["id"]]
+            if len(game["bowler_order"]) == 0:
+                game["bowler_order"] = [p["id"] for p in all_players if not p.get("out", False)]
+            game["current_bowler_index_in_order"] = 0
+            
+            if len(game["bowler_order"]) > 0:
+                next_bowler_id = game["bowler_order"][0]
+                for p in all_players:
+                    if p["id"] == next_bowler_id:
+                        next_bowler = p
+                        break
+        
+        if next_bowler:
+            game["current_bowler"] = next_bowler
+            game["current_bowler_balls"] = 0
+            
+            ball_mode = game.get("ball_mode", 3)
+            next_bowler_clickable = get_clickable_name(next_bowler['id'], next_bowler['name'], next_bowler.get('username'))
+            await client.send_message(chat_id, f"🔄 {ball_mode} balls complete! New bowler: {next_bowler_clickable}", parse_mode=ParseMode.HTML)
+            await send_bowling_video_solo(client, chat_id, game["current_bowler"])
+        else:
+            # No bowlers left, game might end
+            await client.send_message(chat_id, "🏏 No bowlers available! Game ending...")
+            if chat_id in games:
+                del games[chat_id]
 
     # ================= SELECT GAME MENU =================
     async def select_game_menu(client, message):
@@ -2047,14 +2116,14 @@ def register_handlers(app):
         await client.send_video(
             chat_id,
             BATTING_VIDEO,
-            caption=f"Batter :- {batter_clickable}\n\nOver {over_display}",
+            caption=f"Batter :- {batter_clickable}\n\nOver {over_display}\n\nSend number (1-6) in GROUP",
             parse_mode=ParseMode.HTML
         )
         
         try:
             await client.send_message(
                 batter["id"],
-                f"🏏 Send batting number (1-6):\n\n⏰ You have 60 seconds!"
+                f"🏏 Send batting number (1-6):\n\nOver {over_display}\n\n⏰ You have 60 seconds!"
             )
         except:
             pass
@@ -2581,7 +2650,7 @@ def register_handlers(app):
         await client.send_message(chat_id, f"🏏 **Team {team} Batting**\n\nBatter: {batter_clickable}\nBowler: {bowler_clickable}", parse_mode=ParseMode.HTML)
         await send_bowling_video_team(client, chat_id, game["current_bowler"])
 
-    # ================= BATTING (group message) - FINAL FIXED VERSION =================
+    # ================= BATTING (group message) - FINAL FIXED =================
     @app.on_message(filters.group & filters.text & ~filters.bot)
     async def batting_msg(client, message: Message):
         text = message.text.strip()
@@ -2635,7 +2704,6 @@ def register_handlers(app):
             if game.get("status") != "playing" or game.get("game_over"):
                 return
             
-            # CRITICAL: Only proceed if bowler has bowled
             if game.get("bowling_number") is None:
                 await message.reply("⏳ Bowler ne abhi tak ball nahi dali! Pehle bowler ka number aayega.")
                 return
@@ -2652,10 +2720,10 @@ def register_handlers(app):
             
             bat = num
             bow = game.get("bowling_number")
-            game["bowling_number"] = None  # Clear after processing
+            game["bowling_number"] = None
             
             if bat == bow:
-                # ========== OUT ==========
+                # OUT
                 batter_clickable = get_clickable_name(batter['id'], batter['name'], batter.get('username'))
                 
                 try:
@@ -2673,7 +2741,11 @@ def register_handlers(app):
                 all_players = game["players"]
                 active_players = [p for p in all_players if not p.get("out", False)]
                 
-                # 2-player game logic
+                # Remove out player from bowler order
+                if "bowler_order" in game and batter["id"] in game["bowler_order"]:
+                    game["bowler_order"].remove(batter["id"])
+                
+                # 2-player game logic - SILENT swap (no message)
                 if len(all_players) == 2:
                     remaining_player = None
                     out_player = None
@@ -2690,10 +2762,10 @@ def register_handlers(app):
                         game["current_bowler"] = out_player_copy
                         game["current_bowler_balls"] = 0
                         
-                        remaining_clickable = get_clickable_name(remaining_player['id'], remaining_player['name'], remaining_player.get('username'))
-                        out_clickable = get_clickable_name(out_player['id'], out_player['name'], out_player.get('username'))
+                        # Update bowler order
+                        game["bowler_order"] = [remaining_player["id"]]
+                        game["current_bowler_index_in_order"] = 0
                         
-                        await client.send_message(chat_id, f"🔄 **Roles Swapped!** 🔄\n\n🏏 New Batter: {remaining_clickable}\n🎾 New Bowler: {out_clickable}", parse_mode=ParseMode.HTML)
                         await client.send_message(chat_id, build_scoreboard(all_players, is_final=False), parse_mode=ParseMode.HTML)
                         await send_bowling_video_solo(client, chat_id, game["current_bowler"])
                         return
@@ -2728,7 +2800,13 @@ def register_handlers(app):
                         
                         next_batter_clickable = get_clickable_name(next_batter['id'], next_batter['name'], next_batter.get('username'))
                         await client.send_message(chat_id, f"🎾 Next Batsman: {next_batter_clickable}", parse_mode=ParseMode.HTML)
-                        await send_bowling_video_solo(client, chat_id, game["current_bowler"])
+                        
+                        # Check if over complete to change bowler
+                        ball_mode = game.get("ball_mode", 3)
+                        if game["current_bowler_balls"] >= ball_mode:
+                            await select_next_bowler_round_robin(client, chat_id)
+                        else:
+                            await send_bowling_video_solo(client, chat_id, game["current_bowler"])
                     else:
                         final_scoreboard = build_scoreboard(all_players, is_final=True)
                         await client.send_message(chat_id, final_scoreboard, parse_mode=ParseMode.HTML)
@@ -2739,7 +2817,7 @@ def register_handlers(app):
                 return
             
             else:
-                # ========== NOT OUT - ADD RUNS ==========
+                # NOT OUT - Add runs
                 runs = bat
                 
                 try:
@@ -2763,40 +2841,11 @@ def register_handlers(app):
                 
                 await client.send_message(chat_id, build_scoreboard(game["players"], is_final=False), parse_mode=ParseMode.HTML)
                 
-                # ========== BOWLER CHANGE ON 3 BALLS COMPLETE ==========
+                # Check if over complete
                 ball_mode = game.get("ball_mode", 3)
-                
                 if game["current_bowler_balls"] >= ball_mode:
-                    all_players = game["players"]
-                    current_batter = game["current_batter"]
-                    
-                    # Get active bowlers (not out and not current batter)
-                    active_bowlers = [p for p in all_players if not p.get("out", False) and p["id"] != current_batter["id"]]
-                    if len(active_bowlers) == 0:
-                        active_bowlers = [p for p in all_players if not p.get("out", False)]
-                    
-                    if len(active_bowlers) > 0:
-                        current_bowler_id = game["current_bowler"]["id"]
-                        new_bowler = None
-                        
-                        # Find next bowler in sequence
-                        for i, p in enumerate(active_bowlers):
-                            if p["id"] == current_bowler_id:
-                                next_idx = (i + 1) % len(active_bowlers)
-                                new_bowler = active_bowlers[next_idx]
-                                break
-                        
-                        if new_bowler is None and len(active_bowlers) > 0:
-                            new_bowler = active_bowlers[0]
-                        
-                        if new_bowler:
-                            game["current_bowler"] = new_bowler
-                            game["current_bowler_balls"] = 0
-                            
-                            new_bowler_clickable = get_clickable_name(new_bowler['id'], new_bowler['name'], new_bowler.get('username'))
-                            await client.send_message(chat_id, f"🔄 {ball_mode} balls complete! New bowler: {new_bowler_clickable}", parse_mode=ParseMode.HTML)
-                
-                if not game.get("game_over"):
+                    await select_next_bowler_round_robin(client, chat_id)
+                else:
                     await send_bowling_video_solo(client, chat_id, game["current_bowler"])
             return
 
