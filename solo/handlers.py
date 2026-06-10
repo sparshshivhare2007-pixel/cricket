@@ -10,7 +10,7 @@ from datetime import datetime
 import random
 import os
 
-print("🔴 LOADING HANDLERS.PY - FINAL COMPLETE VERSION WITH MILESTONES")
+print("🔴 LOADING HANDLERS.PY - FINAL COMPLETE VERSION")
 
 active_votes = {}
 bowling_tasks = {}
@@ -45,7 +45,7 @@ def get_run_video(runs):
 async def check_and_send_milestone(client, chat_id, player, old_score, new_score, game_mode="solo", team_name=None):
     """Check if player reached 50 or 100 runs and send milestone video"""
     
-    # Create unique key for this player in this chat to avoid duplicate milestones
+    # Create unique key for this player in this chat
     milestone_key = f"{chat_id}_{player['id']}"
     
     # Check for century (100 runs)
@@ -54,12 +54,8 @@ async def check_and_send_milestone(client, chat_id, player, old_score, new_score
             milestone_achieved["century"] = []
         milestone_achieved["century"].append(milestone_key)
         
-        player_clickable = get_clickable_name(player['id'], player['name'], player.get('username'))
-        
-        if game_mode == "team" and team_name:
-            caption = f"🎉 **CENTURY!** 🎉\n\n{player_clickable} from {team_name} has scored a magnificent **100 runs**!\n\n🏏 What a brilliant innings! 🏏"
-        else:
-            caption = f"🎉 **CENTURY!** 🎉\n\n{player_clickable} has scored a magnificent **100 runs**!\n\n🏏 What a brilliant innings! 🏏"
+        player_clickable = get_clickable_name(player['id'], player.get('name', 'Player'), player.get('username'))
+        caption = f"{player_clickable} just reached the milestone of 100 runs! Congratulations!"
         
         try:
             await client.send_video(chat_id, CENTURY_VIDEO, caption=caption, parse_mode=ParseMode.HTML)
@@ -73,12 +69,8 @@ async def check_and_send_milestone(client, chat_id, player, old_score, new_score
             milestone_achieved["half_century"] = []
         milestone_achieved["half_century"].append(milestone_key)
         
-        player_clickable = get_clickable_name(player['id'], player['name'], player.get('username'))
-        
-        if game_mode == "team" and team_name:
-            caption = f"⭐ **HALF-CENTURY!** ⭐\n\n{player_clickable} from {team_name} has reached **50 runs**!\n\n🏏 Excellent batting performance! 🏏"
-        else:
-            caption = f"⭐ **HALF-CENTURY!** ⭐\n\n{player_clickable} has reached **50 runs**!\n\n🏏 Excellent batting performance! 🏏"
+        player_clickable = get_clickable_name(player['id'], player.get('name', 'Player'), player.get('username'))
+        caption = f"{player_clickable} just reached the milestone of 50 runs! Congratulations!"
         
         try:
             await client.send_video(chat_id, FIFTY_VIDEO, caption=caption, parse_mode=ParseMode.HTML)
@@ -106,6 +98,33 @@ def reset_batter_consecutive_timeout(chat_id, user_id):
     if chat_id in batter_consecutive_timeouts:
         if user_id in batter_consecutive_timeouts[chat_id]:
             batter_consecutive_timeouts[chat_id][user_id] = 0
+
+async def is_admin(client, chat_id, user_id):
+    try:
+        member = await client.get_chat_member(chat_id, user_id)
+        return member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]
+    except:
+        return False
+
+def build_team_scoreboard(game):
+    team_key = f"team_{game['current_team'].lower()}"
+    players = game[team_key]
+    
+    scoreboard = f"🏏 **{game['current_team']} Team Scoreboard** 🏏\n\n"
+    scoreboard += f"**Total:** {game['team_total']}/{game['team_wickets']}\n"
+    scoreboard += f"**Balls:** {game['total_balls_in_inning']}\n"
+    scoreboard += f"**Overs:** {game['total_balls_in_inning'] // 6}.{game['total_balls_in_inning'] % 6}\n\n"
+    scoreboard += "**Players:**\n"
+    
+    for p in players:
+        status = "❌" if p.get("out", False) else "🏏"
+        player_name = get_clickable_name(p['id'], p.get('name', 'Unknown'))
+        scoreboard += f"{status} {player_name}: {p['score']} ({p['balls']} balls)"
+        if p.get('fours', 0) > 0 or p.get('sixes', 0) > 0:
+            scoreboard += f" [4s:{p['fours']} 6s:{p['sixes']}]"
+        scoreboard += "\n"
+    
+    return scoreboard
 
 def register_handlers(app):
     print("🔴 REGISTERING HANDLERS...")
@@ -669,7 +688,6 @@ def register_handlers(app):
         game = games[chat_id]
         players = game["players"]
         
-        # Initialize bowler order list for round-robin (all players initially)
         game["bowler_order"] = [p["id"] for p in players]
         game["current_bowler_index_in_order"] = 0
         
@@ -805,7 +823,6 @@ def register_handlers(app):
                         if user_id in bowler_consecutive_timeouts[chat_id]:
                             del bowler_consecutive_timeouts[chat_id][user_id]
                         
-                        # Remove from bowler order
                         if "bowler_order" in game and user_id in game["bowler_order"]:
                             game["bowler_order"].remove(user_id)
                         
@@ -833,7 +850,6 @@ def register_handlers(app):
                                 del games[chat_id]
                             return
                         
-                        # Select next bowler from order
                         await select_next_bowler_round_robin(client, chat_id)
                         return
                 else:
@@ -862,7 +878,6 @@ def register_handlers(app):
                     game["current_bowler_balls"] += 1
                     game["total_balls_in_match"] += 1
                     
-                    # Check if over complete
                     ball_mode = game.get("ball_mode", 3)
                     if game["current_bowler_balls"] >= ball_mode:
                         await select_next_bowler_round_robin(client, chat_id)
@@ -882,41 +897,33 @@ def register_handlers(app):
         current_batter = game["current_batter"]
         current_bowler_id = game["current_bowler"]["id"]
         
-        # Initialize or update bowler order list (exclude current batter, include only active players)
         if "bowler_order" not in game or len(game["bowler_order"]) == 0:
             game["bowler_order"] = [p["id"] for p in all_players if not p.get("out", False) and p["id"] != current_batter["id"]]
             if len(game["bowler_order"]) == 0:
                 game["bowler_order"] = [p["id"] for p in all_players if not p.get("out", False)]
             game["current_bowler_index_in_order"] = 0
         
-        # Remove current bowler from order (he just completed his over)
         if current_bowler_id in game["bowler_order"]:
-            # Find index of current bowler
             current_idx = -1
             for i, bid in enumerate(game["bowler_order"]):
                 if bid == current_bowler_id:
                     current_idx = i
                     break
             
-            # Move to next bowler
             next_idx = (current_idx + 1) % len(game["bowler_order"])
             next_bowler_id = game["bowler_order"][next_idx]
             game["current_bowler_index_in_order"] = next_idx
         else:
-            # If current bowler not in order, just take first
             next_bowler_id = game["bowler_order"][0]
             game["current_bowler_index_in_order"] = 0
         
-        # Find next bowler player object
         next_bowler = None
         for p in all_players:
             if p["id"] == next_bowler_id and not p.get("out", False):
                 next_bowler = p
                 break
         
-        # If next bowler is invalid, find any valid bowler
         if next_bowler is None or next_bowler.get("out", False) or next_bowler["id"] == current_batter["id"]:
-            # Rebuild bowler order excluding current batter
             game["bowler_order"] = [p["id"] for p in all_players if not p.get("out", False) and p["id"] != current_batter["id"]]
             if len(game["bowler_order"]) == 0:
                 game["bowler_order"] = [p["id"] for p in all_players if not p.get("out", False)]
@@ -938,7 +945,6 @@ def register_handlers(app):
             await client.send_message(chat_id, f"🔄 {ball_mode} balls complete! New bowler: {next_bowler_clickable}", parse_mode=ParseMode.HTML)
             await send_bowling_video_solo(client, chat_id, game["current_bowler"])
         else:
-            # No bowlers left, game might end
             await client.send_message(chat_id, "🏏 No bowlers available! Game ending...")
             if chat_id in games:
                 del games[chat_id]
@@ -2313,8 +2319,7 @@ def register_handlers(app):
                 break
         
         # Check for milestones (half-century and century)
-        team_name = f"Team {game['current_team']}"
-        await check_and_send_milestone(client, chat_id, batter, old_score, old_score + runs, "team", team_name)
+        await check_and_send_milestone(client, chat_id, batter, old_score, old_score + runs, "team", None)
         
         game["team_total"] += runs
         game["total_balls_in_inning"] += 1
@@ -2785,11 +2790,9 @@ def register_handlers(app):
                 all_players = game["players"]
                 active_players = [p for p in all_players if not p.get("out", False)]
                 
-                # Remove out player from bowler order
                 if "bowler_order" in game and batter["id"] in game["bowler_order"]:
                     game["bowler_order"].remove(batter["id"])
                 
-                # 2-player game logic - SILENT swap (no message)
                 if len(all_players) == 2:
                     remaining_player = None
                     out_player = None
@@ -2806,7 +2809,6 @@ def register_handlers(app):
                         game["current_bowler"] = out_player_copy
                         game["current_bowler_balls"] = 0
                         
-                        # Update bowler order
                         game["bowler_order"] = [remaining_player["id"]]
                         game["current_bowler_index_in_order"] = 0
                         
@@ -2821,7 +2823,6 @@ def register_handlers(app):
                         del games[chat_id]
                     if chat_id in bowler_consecutive_timeouts:
                         del bowler_consecutive_timeouts[chat_id]
-                    # Reset milestones for this chat
                     reset_milestones_for_chat(chat_id)
                     return
                 
@@ -2847,7 +2848,6 @@ def register_handlers(app):
                         next_batter_clickable = get_clickable_name(next_batter['id'], next_batter['name'], next_batter.get('username'))
                         await client.send_message(chat_id, f"🎾 Next Batsman: {next_batter_clickable}", parse_mode=ParseMode.HTML)
                         
-                        # Check if over complete to change bowler
                         ball_mode = game.get("ball_mode", 3)
                         if game["current_bowler_balls"] >= ball_mode:
                             await select_next_bowler_round_robin(client, chat_id)
@@ -2860,7 +2860,6 @@ def register_handlers(app):
                             del games[chat_id]
                         if chat_id in bowler_consecutive_timeouts:
                             del bowler_consecutive_timeouts[chat_id]
-                        # Reset milestones for this chat
                         reset_milestones_for_chat(chat_id)
                 return
             
@@ -2887,14 +2886,13 @@ def register_handlers(app):
                         break
                 
                 # Check for milestones in solo mode
-                await check_and_send_milestone(client, chat_id, batter, old_score, old_score + runs, "solo")
+                await check_and_send_milestone(client, chat_id, batter, old_score, old_score + runs, "solo", None)
                 
                 game["current_bowler_balls"] = game.get("current_bowler_balls", 0) + 1
                 game["total_runs"] = game.get("total_runs", 0) + runs
                 
                 await client.send_message(chat_id, build_scoreboard(game["players"], is_final=False), parse_mode=ParseMode.HTML)
                 
-                # Check if over complete
                 ball_mode = game.get("ball_mode", 3)
                 if game["current_bowler_balls"] >= ball_mode:
                     await select_next_bowler_round_robin(client, chat_id)
@@ -2970,10 +2968,3 @@ def register_handlers(app):
             vote["active"] = False
 
     print("🔴 ✅ ALL HANDLERS REGISTERED SUCCESSFULLY WITH MILESTONE FEATURE!")
-
-
-# Add these to your config.py file:
-"""
-CENTURY_VIDEO = "assets/video/century.mp4"
-FIFTY_VIDEO = "assets/video/fifty.mp4"
-"""
