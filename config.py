@@ -16,7 +16,7 @@ MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = "cricket_bot"
 
 # ========== ADMIN ==========
-ADMIN_IDS = [6572893382]
+ADMIN_IDS = [8933874700]
 
 # ========== LINKS ==========
 OWNER_LINK = "https://t.me/oye_sparsh"
