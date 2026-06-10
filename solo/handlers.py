@@ -10,7 +10,7 @@ from datetime import datetime
 import random
 import os
 
-print("🔴 LOADING HANDLERS.PY - FINAL COMPLETE VERSION")
+print("🔴 LOADING HANDLERS.PY - FINAL COMPLETE VERSION WITH MILESTONES")
 
 active_votes = {}
 bowling_tasks = {}
@@ -29,6 +29,9 @@ pending_captain_selection = {}
 bowler_consecutive_timeouts = {}
 batter_consecutive_timeouts = {}
 
+# Track milestone achievements to avoid duplicate messages
+milestone_achieved = {}
+
 COUNTDOWN_VIDEO_PATH = "assets/video/countdown.mp4"
 
 def get_clickable_name(user_id, name, username=None):
@@ -39,32 +42,58 @@ def get_run_video(runs):
     run_videos = {1: RUN_1_VIDEO, 2: RUN_2_VIDEO, 3: RUN_3_VIDEO, 4: RUN_4_VIDEO, 5: RUN_5_VIDEO, 6: RUN_6_VIDEO}
     return run_videos.get(runs, RUN_1_VIDEO)
 
-async def is_admin(client, chat_id, user_id):
-    try:
-        member = await client.get_chat_member(chat_id, user_id)
-        return member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]
-    except:
-        return False
+async def check_and_send_milestone(client, chat_id, player, old_score, new_score, game_mode="solo", team_name=None):
+    """Check if player reached 50 or 100 runs and send milestone video"""
+    
+    # Create unique key for this player in this chat to avoid duplicate milestones
+    milestone_key = f"{chat_id}_{player['id']}"
+    
+    # Check for century (100 runs)
+    if old_score < 100 <= new_score and milestone_key not in milestone_achieved.get("century", []):
+        if "century" not in milestone_achieved:
+            milestone_achieved["century"] = []
+        milestone_achieved["century"].append(milestone_key)
+        
+        player_clickable = get_clickable_name(player['id'], player['name'], player.get('username'))
+        
+        if game_mode == "team" and team_name:
+            caption = f"🎉 **CENTURY!** 🎉\n\n{player_clickable} from {team_name} has scored a magnificent **100 runs**!\n\n🏏 What a brilliant innings! 🏏"
+        else:
+            caption = f"🎉 **CENTURY!** 🎉\n\n{player_clickable} has scored a magnificent **100 runs**!\n\n🏏 What a brilliant innings! 🏏"
+        
+        try:
+            await client.send_video(chat_id, CENTURY_VIDEO, caption=caption, parse_mode=ParseMode.HTML)
+        except:
+            await client.send_message(chat_id, caption, parse_mode=ParseMode.HTML)
+        return True
+    
+    # Check for half-century (50 runs)
+    elif old_score < 50 <= new_score and milestone_key not in milestone_achieved.get("half_century", []):
+        if "half_century" not in milestone_achieved:
+            milestone_achieved["half_century"] = []
+        milestone_achieved["half_century"].append(milestone_key)
+        
+        player_clickable = get_clickable_name(player['id'], player['name'], player.get('username'))
+        
+        if game_mode == "team" and team_name:
+            caption = f"⭐ **HALF-CENTURY!** ⭐\n\n{player_clickable} from {team_name} has reached **50 runs**!\n\n🏏 Excellent batting performance! 🏏"
+        else:
+            caption = f"⭐ **HALF-CENTURY!** ⭐\n\n{player_clickable} has reached **50 runs**!\n\n🏏 Excellent batting performance! 🏏"
+        
+        try:
+            await client.send_video(chat_id, FIFTY_VIDEO, caption=caption, parse_mode=ParseMode.HTML)
+        except:
+            await client.send_message(chat_id, caption, parse_mode=ParseMode.HTML)
+        return True
+    
+    return False
 
-def build_team_scoreboard(game):
-    team_key = f"team_{game['current_team'].lower()}"
-    players = game[team_key]
-    
-    scoreboard = f"🏏 **{game['current_team']} Team Scoreboard** 🏏\n\n"
-    scoreboard += f"**Total:** {game['team_total']}/{game['team_wickets']}\n"
-    scoreboard += f"**Balls:** {game['total_balls_in_inning']}\n"
-    scoreboard += f"**Overs:** {game['total_balls_in_inning'] // 6}.{game['total_balls_in_inning'] % 6}\n\n"
-    scoreboard += "**Players:**\n"
-    
-    for p in players:
-        status = "❌" if p.get("out", False) else "🏏"
-        player_name = get_clickable_name(p['id'], p.get('name', 'Unknown'))
-        scoreboard += f"{status} {player_name}: {p['score']} ({p['balls']} balls)"
-        if p.get('fours', 0) > 0 or p.get('sixes', 0) > 0:
-            scoreboard += f" [4s:{p['fours']} 6s:{p['sixes']}]"
-        scoreboard += "\n"
-    
-    return scoreboard
+def reset_milestones_for_chat(chat_id):
+    """Reset milestone tracking for a chat when game ends"""
+    if "century" in milestone_achieved:
+        milestone_achieved["century"] = [m for m in milestone_achieved["century"] if not m.startswith(f"{chat_id}_")]
+    if "half_century" in milestone_achieved:
+        milestone_achieved["half_century"] = [m for m in milestone_achieved["half_century"] if not m.startswith(f"{chat_id}_")]
 
 def reset_bowler_consecutive_timeout(chat_id, user_id):
     """Reset consecutive timeout count for a bowler"""
@@ -171,6 +200,7 @@ def register_handlers(app):
 • Solo mode requires minimum 2 players
 • 3 balls per bowler in solo mode
 • Bot must be admin in group
+• 🎉 Special video for Half-Century (50 runs) and Century (100 runs)! 🎉
 
 🏏 **Enjoy the game!** 🏏"""
         
@@ -270,6 +300,9 @@ def register_handlers(app):
             except:
                 pass
             del bowling_tasks[chat_id]
+        
+        # Reset milestones for this chat
+        reset_milestones_for_chat(chat_id)
         
         if solo_game:
             if solo_game.get("status") == "playing" and not solo_game.get("game_over"):
@@ -2265,9 +2298,11 @@ def register_handlers(app):
             return
         
         team_key = f"team_{game['current_team'].lower()}"
+        old_score = 0
         
         for p in game[team_key]:
             if p["id"] == batter["id"]:
+                old_score = p["score"]
                 p["score"] += runs
                 p["balls"] += 1
                 if runs == 4:
@@ -2276,6 +2311,10 @@ def register_handlers(app):
                     p["sixes"] += 1
                 p["history"].append(str(runs))
                 break
+        
+        # Check for milestones (half-century and century)
+        team_name = f"Team {game['current_team']}"
+        await check_and_send_milestone(client, chat_id, batter, old_score, old_score + runs, "team", team_name)
         
         game["team_total"] += runs
         game["total_balls_in_inning"] += 1
@@ -2456,6 +2495,9 @@ def register_handlers(app):
             except:
                 pass
             del bowling_tasks[chat_id]
+        
+        # Reset milestones for this chat
+        reset_milestones_for_chat(chat_id)
 
     # ================= SWAP COMMAND =================
     @app.on_message(filters.command("swap") & filters.group)
@@ -2650,7 +2692,7 @@ def register_handlers(app):
         await client.send_message(chat_id, f"🏏 **Team {team} Batting**\n\nBatter: {batter_clickable}\nBowler: {bowler_clickable}", parse_mode=ParseMode.HTML)
         await send_bowling_video_team(client, chat_id, game["current_bowler"])
 
-    # ================= BATTING (group message) - FINAL FIXED =================
+    # ================= BATTING (group message) - FINAL FIXED WITH MILESTONES =================
     @app.on_message(filters.group & filters.text & ~filters.bot)
     async def batting_msg(client, message: Message):
         text = message.text.strip()
@@ -2731,8 +2773,10 @@ def register_handlers(app):
                 except:
                     await message.reply(f"❌ Out {batter_clickable}")
                 
+                old_score = 0
                 for p in game["players"]:
                     if p["id"] == batter["id"]:
+                        old_score = p["score"]
                         p["out"] = True
                         break
                 
@@ -2777,6 +2821,8 @@ def register_handlers(app):
                         del games[chat_id]
                     if chat_id in bowler_consecutive_timeouts:
                         del bowler_consecutive_timeouts[chat_id]
+                    # Reset milestones for this chat
+                    reset_milestones_for_chat(chat_id)
                     return
                 
                 if len(all_players) > 2:
@@ -2814,6 +2860,8 @@ def register_handlers(app):
                             del games[chat_id]
                         if chat_id in bowler_consecutive_timeouts:
                             del bowler_consecutive_timeouts[chat_id]
+                        # Reset milestones for this chat
+                        reset_milestones_for_chat(chat_id)
                 return
             
             else:
@@ -2825,8 +2873,10 @@ def register_handlers(app):
                 except:
                     await message.reply(f"🏏 {runs} runs!")
                 
+                old_score = 0
                 for p in game["players"]:
                     if p["id"] == batter["id"]:
+                        old_score = p["score"]
                         p["score"] += runs
                         p["balls"] += 1
                         if runs == 4:
@@ -2835,6 +2885,9 @@ def register_handlers(app):
                             p["sixes"] = p.get("sixes", 0) + 1
                         p["history"].append(str(runs))
                         break
+                
+                # Check for milestones in solo mode
+                await check_and_send_milestone(client, chat_id, batter, old_score, old_score + runs, "solo")
                 
                 game["current_bowler_balls"] = game.get("current_bowler_balls", 0) + 1
                 game["total_runs"] = game.get("total_runs", 0) + runs
@@ -2916,4 +2969,11 @@ def register_handlers(app):
                 pass
             vote["active"] = False
 
-    print("🔴 ✅ ALL HANDLERS REGISTERED SUCCESSFULLY!")
+    print("🔴 ✅ ALL HANDLERS REGISTERED SUCCESSFULLY WITH MILESTONE FEATURE!")
+
+
+# Add these to your config.py file:
+"""
+CENTURY_VIDEO = "assets/video/century.mp4"
+FIFTY_VIDEO = "assets/video/fifty.mp4"
+"""
