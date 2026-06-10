@@ -38,6 +38,9 @@ HOST_IMAGE_URL = os.path.join(IMAGES_PATH, "host_image.jpg")
 SOLO_GAME_START_IMAGE = os.path.join(IMAGES_PATH, "game_start.jpg")
 TEAM_PLAY_IMAGE = os.path.join(IMAGES_PATH, "team_match.jpg")
 
+# Milestone Videos
+FIFTY_VIDEO = "assets/video/fifty.mp4"
+CENTURY_VIDEO = "assets/video/century.mp4"
 # ========== AUCTION MODE IMAGES ==========
 AUCTION_PLAY_IMAGE = os.path.join(IMAGES_PATH, "auction_play.jpg")
 AUCTION_HOST_IMAGE = os.path.join(IMAGES_PATH, "auction_host.jpg")
