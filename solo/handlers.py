@@ -10,7 +10,7 @@ from datetime import datetime
 import random
 import os
 
-print("🔴 LOADING HANDLERS.PY - FINAL COMPLETE VERSION")
+print("🔴 THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG")
 
 active_votes = {}
 bowling_tasks = {}
